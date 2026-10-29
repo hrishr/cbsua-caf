@@ -82,6 +82,7 @@ table{border-collapse:collapse;width:100%}
 }
 
 [hidden]{display:none!important}
+a.btn{text-decoration:none;display:inline-block}
 .chk{display:flex;align-items:center;gap:8px;font-weight:500;font-size:13px;color:var(--mute);margin-top:8px;cursor:pointer}
 .chk input{display:inline-block;width:auto;margin:0}
 #app{min-height:100vh;display:flex;flex-direction:column}main{flex:1}
@@ -224,6 +225,13 @@ body.user .adm{display:none!important}
    <div class="scroll"><table class="res"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th></th></tr></thead><tbody id="usrBody"></tbody></table></div>
    <p class="sub" style="font-size:12px;margin:10px 0 0">Accounts live in Firebase, so they work on every computer, and the Firestore rules enforce these limits on the server. A forgotten password cannot be reset by an administrator: disable the old account and add a new username.</p>
   </div>
+  <div class="card"><h3>Change my password</h3>
+   <div class="grid"><label>Current password<input id="pwc" type="password" autocomplete="current-password"></label>
+   <label>New password<input id="pwn" type="password" autocomplete="new-password"></label>
+   <label>Confirm new password<input id="pwf" type="password" autocomplete="new-password"></label></div>
+   <label class="chk"><input type="checkbox" id="pshow"> Show passwords</label>
+   <p class="warn" id="pwmsg" style="margin:10px 0 0"></p><button class="btn sm" id="pwgo" style="margin-top:6px">Change password</button>
+  </div>
  </div>
  </div>
 </div></main>
@@ -321,7 +329,7 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
   h=LH('WORK SAMPLE TEST RESULT')+`<div class="c t3">${FOR}</div><div class="c">${esc(dfmt(p.wsDate,1))}</div><div class="scroll"><table class="res" style="margin-top:14px"><thead><tr><th>NO.</th><th>NAME</th><th>Raw Score</th><th>Equiv. Score</th><th>Earned Points (${w('ws')}%)</th></tr></thead>
   <tbody>${body(r=>nm(r)+cell(0,'ws',r.ws)+dc('wsE')+dc('wsP'))}</tbody></table></div>`+NF+sig()}
  else if(T==='BEI'){
-  h=LH('TABULATION OF BEHAVIORAL EVENT INTERVIEW OF APPLICANTS')+`<div class="c t3">${FOR}</div><div class="c">${esc(p.beiDate)}</div><div class="scroll"><table class="res" style="margin-top:14px"><thead>
+  h=LH('TABULATION OF BEHAVIORAL EVENT INTERVIEW OF APPLICANTS')+`<div class="c t3">${FOR}</div><div class="c">${esc(p.beiDate)}</div><div class="np row" style="margin:12px 0 0"><a class="btn sm out" href="https://hrishr.github.io/bei-tabulation/" target="_blank" rel="noopener">Open BEI Tabulation ↗</a></div><div class="scroll"><table class="res" style="margin-top:14px"><thead>
   <tr><th rowspan="2">NO.</th><th rowspan="2">NAME</th><th colspan="5">RATERS’ RATING</th><th rowspan="2">TOTAL</th><th rowspan="2">MEAN</th><th rowspan="2">% Weight<br><small>total / total point score (${p.max.bei}) × 100</small></th><th rowspan="2">EARNED POINTS (${w('bei')}%)</th></tr><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th></tr></thead>
   <tbody>${body(r=>nm(r)+r.b.map((b,j)=>cell(0,'b'+j,b)).join('')+dc('bT')+dc('bM')+dc('bE')+dc('bP'))}</tbody></table></div>`+NF+sig()}
  else{
@@ -561,6 +569,12 @@ async function fbStart(){try{setPill('Connecting…');STAT='Connecting to Fireba
   catch(e){INIT=null;STAT=e.code==='permission-denied'?'The Firestore rules are not published yet. Publish them in the Firebase console, then reload this page.':mapErr(e)}
   chrome();setPill('Signed out');await FB.setPersistence(auth,FB.browserSessionPersistence);FB.onAuthStateChanged(auth,onAuth)}
  catch(e){STAT='Could not start Firebase: '+mapErr(e);chrome();setPill('Offline')}}
+
+$('#pwgo').onclick=async()=>{const e=t=>$('#pwmsg').textContent=t,cur=$('#pwc').value,nw=$('#pwn').value;
+ if(!auth||!auth.currentUser)return;if(!cur)return e('Enter your current password.');if(nw.length<6)return e('The new password must be at least 6 characters.');if(nw!==$('#pwf').value)return e('The new passwords do not match.');
+ try{const u=auth.currentUser;await FB.reauthenticateWithCredential(u,FB.EmailAuthProvider.credential(u.email,cur));await FB.updatePassword(u,nw);['#pwc','#pwn','#pwf'].forEach(q=>$(q).value='');e('Password changed.')}
+ catch(x){e(/invalid-credential|wrong-password/.test((x&&x.code)||'')?'Your current password is wrong.':mapErr(x))}};
+$('#pshow').onchange=ev=>['#pwc','#pwn','#pwf'].forEach(q=>$(q).type=ev.target.checked?'text':'password');
 
 /* CAF.setBEI('Juan Dela Cruz',[25,28,27,23,25]) fills raters A–E for that applicant in the selected position and saves it. */
 window.CAF={state:()=>S,
