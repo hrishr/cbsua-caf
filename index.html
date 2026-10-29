@@ -145,7 +145,7 @@ body.user .adm{display:none!important}
     <button class="btn sm out" id="up">Upload positions (.xlsx)</button>
     <input type="file" id="file" accept=".xlsx,.xls" hidden><input type="file" id="cbeFile" accept=".xlsx,.xls" hidden>
    </div>
-   <p class="sub" id="msg" role="status" style="margin:10px 0 0">Columns: Vacant Position, Plantilla Item Number, Education, Experience, Training and Eligibility Requirements. Download it, fill it in and upload it to add or update many positions at once.</p>
+   <p class="sub" id="msg" role="status" style="margin:10px 0 0">Columns: Plantilla Item Number, Education, Experience, Training and Eligibility. Download the template, fill it in and upload it to add or update many positions at once. Positions already on the page are listed in it, so you only fill in their requirements.</p>
   </div>
 
   <div class="card"><details><summary>Position details</summary>
@@ -394,7 +394,8 @@ const needX=()=>typeof XLSX==='undefined'?(msg('The Excel library could not load
 const findPos=it=>Object.keys(S.positions).find(id=>cl(S.positions[id].itemNo).toLowerCase()===cl(it).toLowerCase());
 const xd=v=>typeof v==='number'?new Date(Math.round((v-25569)*864e5)).toISOString().slice(0,10):cl(v);
 const ITEM=/\(([^()]*-\d+-\d{4})\)\s*$/,TAIL=/\s*\([^()]*-\d+-\d{4}\)\s*$/;
-const PCOLS=[['Vacant Position','title'],['Plantilla Item Number','itemNo'],['Education Requirements','edu'],['Experience Requirements','exp'],['Training Requirements','trg'],['Eligibility Requirements','elig']];
+const PCOLS=[['Plantilla Item Number','itemNo'],['Education','edu'],['Experience','exp'],['Training','trg'],['Eligibility','elig']];
+const RCOLS=[...PCOLS,['Vacant Position','title'],['Education Requirements','edu'],['Experience Requirements','exp'],['Training Requirements','trg'],['Eligibility Requirements','elig']];
 const sj=(wb,n)=>wb.Sheets[n]?XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''}):[];
 const readX=(f,cb)=>{if(!f||needX())return;const r=new FileReader();
  r.onload=()=>{let wb;try{wb=XLSX.read(r.result,{type:'array'})}catch(x){return msg('That file could not be read as an Excel workbook.')}cb(wb)};r.readAsArrayBuffer(f)};
@@ -415,14 +416,15 @@ function cbeTable(){const q=cbeQ.toLowerCase(),R=S.cbe.rows,L=R.filter(x=>!q||(x
  <tr><th>verbal</th><th>numerical</th><th>abstract</th><th>score</th><th>%</th><th>score</th><th>%</th><th>score</th><th>%</th></tr></thead><tbody>${sh.map(x=>{const c=cbeCalc(x);
   return`<tr class="${c.rem==='FAIL'?'rf':c.none?'rd':''}"><td>${esc(x.no)}</td><td class="l">${esc(x.last)}</td><td class="l">${esc(x.first)}</td><td class="l">${esc(x.pos)}</td><td>${esc(x.v)}</td><td>${esc(x.n)}</td><td>${esc(x.a)}</td><td>${c.as??''}</td><td>${fmt(c.ap)}</td><td>${esc(x.cbt)}</td><td>${fmt(c.cp)}</td><td>${esc(x.off)}</td><td>${fmt(c.op)}</td><td>${fmt(c.p[0])}</td><td>${fmt(c.p[1])}</td><td>${fmt(c.p[2])}</td><td>${c.raw}</td><td>${fmt(c.cum)}</td><td class="l">${c.rem}</td></tr>`}).join('')}</tbody></table></div>`}
 
-$('#dl').onclick=()=>{if(needX())return;const ps=Object.values(S.positions),wb=XLSX.utils.book_new();
- XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([PCOLS.map(c=>c[0]),...ps.map(p=>PCOLS.map(c=>get(p,c[1])??''))]),'Positions');
- XLSX.writeFile(wb,'positions.xlsx');msg(`Downloaded ${ps.length} positions.`)};
+$('#dl').onclick=()=>{if(needX())return;const ps=Object.values(S.positions).sort((a,b)=>(a.itemNo||'').localeCompare(b.itemNo||'')),wb=XLSX.utils.book_new();
+ const ws=XLSX.utils.aoa_to_sheet([PCOLS.map(c=>c[0]),...ps.map(p=>PCOLS.map(c=>get(p,c[1])??''))]);ws['!cols']=[{wch:28},{wch:42},{wch:42},{wch:42},{wch:42}];
+ XLSX.utils.book_append_sheet(wb,ws,'Positions');XLSX.writeFile(wb,'positions-template.xlsx');
+ msg(ps.length?`Downloaded the template with ${ps.length} positions listed. Fill in the columns and upload it.`:'Downloaded the blank template. Fill it in and upload it.')};
 $('#up').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,wb=>{let made=0,upd=0;
  sj(wb,wb.SheetNames.includes('Positions')?'Positions':wb.SheetNames[0]).forEach(o=>{const it=cl(o['Plantilla Item Number']);if(!it)return;let id=findPos(it),p;
   if(id){p=S.positions[id];upd++}else{id=uid();p=S.positions[id]=newPos(P());made++}
-  PCOLS.forEach(([h,k])=>{const v=o[h];if(v==='')return;set(p,k,k==='elig'?String(v).trim():cl(v))})});
+  RCOLS.forEach(([h,k])=>{const v=o[h];if(v===''||v===undefined)return;set(p,k,k==='elig'?String(v).trim():cl(v))})});
  if(!made&&!upd)return msg('Nothing to import. The first sheet needs a "Plantilla Item Number" column with one row per position.');
  save();all();msg(`Uploaded: ${made} new and ${upd} updated positions.`)})};
 $('#cbeFile').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,wb=>{
