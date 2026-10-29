@@ -349,8 +349,6 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  if(t.dataset.t){tab=+t.dataset.t;tabs();sheet();return}
  if(t.dataset.v){if(t.dataset.v!=='caf'&&!isAdmin())return;view=t.dataset.v;chrome();return}
  if(t.id==='out'){view='caf';if(FB)FB.signOut(auth);return}
- if(t.id==='chpw'){const cur=prompt('Current password');if(!cur)return;const nw=prompt('New password (at least 6 characters)');if(!nw||nw.length<6)return msg('Password not changed. It must be at least 6 characters.');
-  try{const u=auth.currentUser;await FB.reauthenticateWithCredential(u,FB.EmailAuthProvider.credential(u.email,cur));await FB.updatePassword(u,nw);msg('Password changed.')}catch(e){msg(mapErr(e))}return}
  if(t.dataset.hx!==undefined){S.settings.headers.splice(+t.dataset.hx,1);saveHeaders();return}
  if(t.dataset.ud!==undefined||t.dataset.ur!==undefined){const id=t.dataset.ud??t.dataset.ur,u=S.users.find(x=>x.uid===id);if(!u||u.uid===S.me.uid||!isAdmin())return;
   try{await FB.updateDoc(FB.doc(db,'users',id),t.dataset.ud!==undefined?{disabled:!u.disabled}:{role:u.role==='admin'?'user':'admin'})}catch(e){$('#uerr').textContent=mapErr(e)}return}
@@ -429,7 +427,7 @@ function chrome(){const ad=isAdmin(),m=me();document.body.classList.toggle('user
  if(!ad){view='caf';if(tab===0)tab=1}
  $('#side').innerHTML=[['caf','CAF'],['setup','SETUP'],['settings','SETTINGS']].filter(x=>ad||x[0]==='caf').map(([k,l])=>`<button class="sb${view===k?' on':''}" data-v="${k}">${l}</button>`).join('');
  ['caf','setup','settings'].forEach(k=>$('#v-'+k).hidden=view!==k);
- $('#who').innerHTML=m?`<span>${esc(m.name)} · ${m.role}</span><button class="btn ghost sm" id="chpw">Change password</button><button class="btn ghost sm" id="out">Log out</button>`:'';}
+ $('#who').innerHTML=m?`<span>${esc(m.name)} · ${m.role}</span><button class="btn ghost sm" id="out">Log out</button>`:'';}
 function settingsUI(){const H=S.settings.headers;
  $('#hdrBox').innerHTML=H.map((h,i)=>`<div class="thumb"><img src="${h}" alt=""><button data-hx="${i}" aria-label="Remove image">×</button></div>`).join('')+(H.length<8?'<label class="addimg"><span>+</span>Add image<input type="file" id="hdrFile" accept="image/png,image/jpeg" multiple hidden></label>':'');
  $('#hdrCount').textContent=`${H.length} of 8 used. You can pick several files at once.`;
