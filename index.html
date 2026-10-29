@@ -118,7 +118,7 @@ body.user .adm{display:none!important}
 <header class="banner np"><div class="wrap">
  <span class="seal" role="img" aria-label="CBSUA seal"></span>
  <div><h2>Comparative Assessment Form</h2><p>Office of the Human Resource Management and Development</p></div>
- <div class="right"><span class="who" id="who"></span><span class="pill">Saved on this device</span></div>
+ <div class="right"><span class="who" id="who"></span><span class="pill" id="pill">Connecting…</span></div>
 </div></header>
 
 <main><div class="wrap layout">
@@ -215,14 +215,14 @@ body.user .adm{display:none!important}
   <h1>Users</h1>
   <p class="sub" id="usrNote"></p>
   <div class="card"><h3>Add a user</h3>
-   <div class="grid"><label>Name<input id="un"></label><label>Username<input id="uu" autocomplete="off"></label><label>Password<input id="upw" type="password" autocomplete="new-password"></label>
+   <div class="grid"><label>Name<input id="un"></label><label>Username<input id="uu" autocomplete="off" placeholder="letters and numbers, no spaces"></label><label>Password<input id="upw" type="password" autocomplete="new-password"></label>
    <label>Role<select id="ur"><option value="user">User (scores only)</option><option value="admin">Admin (everything)</option></select></label></div>
    <label class="chk"><input type="checkbox" id="ushow"> Show password</label>
    <p class="warn" id="uerr" style="margin:10px 0 0"></p><button class="btn sm" id="uadd" style="margin-top:6px">Add user</button>
   </div>
   <div class="card"><h3>Users</h3>
    <div class="scroll"><table class="res"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th></th></tr></thead><tbody id="usrBody"></tbody></table></div>
-   <p class="sub" style="font-size:12px;margin:10px 0 0">Sign-in is kept in this browser. When you connect the live database, use Firebase Authentication and security rules so these limits are enforced on the server too.</p>
+   <p class="sub" style="font-size:12px;margin:10px 0 0">Accounts live in Firebase, so they work on every computer, and the Firestore rules enforce these limits on the server. A forgotten password cannot be reset by an administrator: disable the old account and add a new username.</p>
   </div>
  </div>
  </div>
@@ -245,7 +245,8 @@ const KEY='caf.v2',$=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const num=v=>{const x=parseFloat(v);return isNaN(x)?null:x};
 const fmt=v=>v===null||v===undefined?'':v.toFixed(2);
-const blank=()=>({name:'',raw:'',ex:'',exRem:'',ws:'',b:['','','','',''],pf:'',pfRem:''});
+const rid=()=>Math.random().toString(36).slice(2,10);
+const blank=()=>({id:rid(),name:'',raw:'',ex:'',exRem:'',ws:'',b:['','','','',''],pf:'',pfRem:''});
 const get=(o,k)=>k.split('.').reduce((a,x)=>a?a[x]:undefined,o);
 const set=(o,k,v)=>{const a=k.split('.'),l=a.pop();a.reduce((x,y)=>x[y]??={},o)[l]=v};
 const uid=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
@@ -258,11 +259,10 @@ function seedPos(){return{title:'One (1) University Extension Specialist I',item
  sign:{prep:{n:'',p:''},cert:{n:'LUIGI LORENZO N. RAZAL, RN',p:'Supervising Administrative Officer'},appr:{n:'ATTY. DOMINADOR F. FAURILLO',p:'Vice President for Administration & Finance',r:'Chairman, HRMPSB for Non-Teaching'}},
  rows:Array.from({length:5},blank)}}
 function newPos(c){return Object.assign(seedPos(),{title:'',itemNo:'',date:'',wsDate:'',beiDate:'',edu:'',exp:'',trg:'',elig:'',w:{...c.w},max:{...c.max},sign:JSON.parse(JSON.stringify(c.sign)),rows:Array.from({length:5},blank)})}
-function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.positions&&s.positions[s.current])return s}catch(e){}
- const id=uid();return{current:id,positions:{[id]:seedPos()}}}
-let S=load();S.cbe??={rows:[],file:''};S.users??=[];S.settings??={headers:[]};const P=()=>S.positions[S.current];
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){if(!save.w){save.w=1;alert('Browser storage is full, so changes may not be kept. Remove some header images or download a backup.')}}
- if(typeof window.CAF.onSave==='function')window.CAF.onSave(S)}
+function load(){let c='';try{c=localStorage.getItem('caf.cur')||''}catch(e){}return{current:c,positions:{},cbe:{rows:[],file:''},users:[],settings:{headers:[]},me:null}}
+const EMPTY=Object.assign(newPos(seedPos()),{rows:[]});
+let S=load();const P=()=>S.positions[S.current]||EMPTY;
+function save(){clearTimeout(save.t);save.t=setTimeout(()=>syncAll(),350)}
 
 function calc(p,r){
  const ex=num(r.ex),ws=num(r.ws),pf=num(r.pf),bs=r.b.map(num).filter(x=>x!==null),c={};
@@ -275,7 +275,7 @@ function calc(p,r){
  c.sub=(c.exP||0)+(c.wsP||0)+(c.bP||0);c.tot=c.sub+(c.pfP||0);return c}
 
 function options(){[['#flt','#sel'],['#flt2','#sel2']].forEach(([fi,se])=>{const f=$(fi).value.toLowerCase();
- const ids=Object.keys(S.positions).filter(id=>id===S.current||(S.positions[id].itemNo+' '+S.positions[id].title).toLowerCase().includes(f));
+ const ids=Object.keys(S.positions).sort(byItem).filter(id=>id===S.current||(S.positions[id].itemNo+' '+S.positions[id].title).toLowerCase().includes(f));
  $(se).innerHTML=ids.map(id=>{const p=S.positions[id];return`<option value="${id}"${id===S.current?' selected':''}>${esc(p.itemNo||p.title||'Untitled position')}</option>`}).join('')})}
 function fields(){document.querySelectorAll('[data-k]').forEach(e=>e.value=get(P(),e.dataset.k)??'');head()}
 function head(){const p=P();$('#h1').textContent=p.title||'New position';
@@ -338,9 +338,9 @@ function upd(root=$('#sheet'),p=P()){root.querySelectorAll('tr[data-i]').forEach
 function all(){chrome();options();fields();tabs();sheet();settingsUI()}
 
 document.addEventListener('input',e=>{const t=e.target,k=t.dataset.k;if(t.dataset.q!==undefined){cbeQ=t.value;cbeTable();return}
- if(k){set(P(),k,t.type==='number'?(t.value===''?'':+t.value):t.value);head();if(k==='title'||k==='itemNo')options();save();sheet()}
+ if(k){if(!S.positions[S.current])return;set(P(),k,t.type==='number'?(t.value===''?'':+t.value):t.value);head();if(k==='title'||k==='itemNo')options();save();sheet()}
  else if(t.dataset.f){const r=P().rows[t.closest('tr').dataset.i],f=t.dataset.f;
-  if(/^b\d$/.test(f))r.b[+f[1]]=t.value;else r[f]=t.value;save();upd()}});
+  if(/^b\d$/.test(f))r.b[+f[1]]=t.value;else r[f]=t.value;f==='name'?save():dirtyScore(S.current,r,f);upd()}});
 document.addEventListener('paste',e=>{const t=e.target;if(t.dataset.f!=='name'||!isAdmin())return;
  const lines=(e.clipboardData.getData('text')||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
  if(lines.length<2)return;e.preventDefault();const rows=P().rows;let i=+t.closest('tr').dataset.i;
@@ -348,13 +348,12 @@ document.addEventListener('paste',e=>{const t=e.target;if(t.dataset.f!=='name'||
 document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P();
  if(t.dataset.t){tab=+t.dataset.t;tabs();sheet();return}
  if(t.dataset.v){if(t.dataset.v!=='caf'&&!isAdmin())return;view=t.dataset.v;chrome();return}
- if(t.id==='out'){sessionStorage.removeItem('caf.me');view='caf';all();return}
- if(t.dataset.hx!==undefined){S.settings.headers.splice(+t.dataset.hx,1);save();settingsUI();sheet();return}
- if(t.dataset.ux!==undefined){const i=+t.dataset.ux,u=S.users[i];
-  if(u.role==='admin'&&S.users.filter(x=>x.role==='admin').length===1)return $('#uerr').textContent='Keep at least one admin.';
-  if(!confirm(`Remove ${u.name}?`))return;S.users.splice(i,1);if(u.user===meName())sessionStorage.removeItem('caf.me');save();all();return}
- if(t.dataset.pw!==undefined){const u=S.users[+t.dataset.pw],pw=prompt(`New password for ${u.name} (at least 4 characters)`);
-  if(pw&&pw.length>=4){u.pw=await hash(pw);save();$('#uerr').textContent='Password updated.'}return}
+ if(t.id==='out'){view='caf';if(FB)FB.signOut(auth);return}
+ if(t.id==='chpw'){const cur=prompt('Current password');if(!cur)return;const nw=prompt('New password (at least 6 characters)');if(!nw||nw.length<6)return msg('Password not changed. It must be at least 6 characters.');
+  try{const u=auth.currentUser;await FB.reauthenticateWithCredential(u,FB.EmailAuthProvider.credential(u.email,cur));await FB.updatePassword(u,nw);msg('Password changed.')}catch(e){msg(mapErr(e))}return}
+ if(t.dataset.hx!==undefined){S.settings.headers.splice(+t.dataset.hx,1);saveHeaders();return}
+ if(t.dataset.ud!==undefined||t.dataset.ur!==undefined){const id=t.dataset.ud??t.dataset.ur,u=S.users.find(x=>x.uid===id);if(!u||u.uid===S.me.uid||!isAdmin())return;
+  try{await FB.updateDoc(FB.doc(db,'users',id),t.dataset.ud!==undefined?{disabled:!u.disabled}:{role:u.role==='admin'?'user':'admin'})}catch(e){$('#uerr').textContent=mapErr(e)}return}
  if(a&&!isAdmin())return;
  if(a==='cbeUp')return $('#cbeFile').click();
  if(a==='cbeThis'){cbeQ=p.itemNo||'';return sheet()}
@@ -364,12 +363,12 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  else if(a==='del'){p.rows.splice(+t.closest('tr').dataset.i,1);if(!p.rows.length)p.rows.push(blank())}else return;
  save();sheet()});
 $('#flt').oninput=$('#flt2').oninput=options;
-$('#sel').onchange=$('#sel2').onchange=e=>{S.current=e.target.value;save();all()};
+$('#sel').onchange=$('#sel2').onchange=e=>{S.current=e.target.value;try{localStorage.setItem('caf.cur',S.current)}catch(x){}all()};
 $('#new').onclick=()=>{const id=uid(),n=newPos(P());
  S.positions[id]=n;S.current=id;$('#flt').value='';save();all();const d=document.querySelector('details');d.open=true;document.querySelector('[data-k=itemNo]').focus()};
-$('#del').onclick=()=>{if(!confirm('Delete this position and all its scores?'))return;
+$('#del').onclick=()=>{if(!S.positions[S.current]||!confirm('Delete this position and all its scores?'))return;
  delete S.positions[S.current];const ids=Object.keys(S.positions);
- if(ids.length)S.current=ids[0];else{S.current=uid();S.positions[S.current]=seedPos()}save();all()};
+ if(ids.length)S.current=ids[0];else S.current='';save();all()};
 const cl=v=>String(v??'').replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
 const msg=t=>{$('#msg').textContent=t;$('#msg2').textContent=t};
 const needX=()=>typeof XLSX==='undefined'?(msg('The Excel library could not load. Check your internet connection and reload the page.'),1):0;
@@ -412,7 +411,7 @@ $('#cbeFile').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,w
  A.slice(2).forEach(r=>{const last=cl(r[1]),pos=cl(r[3]);if(!last||!pos||last==='LAST NAME')return;const m=pos.match(ITEM);
   rows.push({no:r[0],last,first:cl(r[2]),pos,item:m?m[1]:'',v:r[4],n:r[5],a:r[6],cbt:r[9],off:r[11]})});
  if(!rows.length)return msg('No applicants found. Expected a "Final CBE Scores" sheet with the usual columns.');
- S.cbe={rows,file:f.name};let made=0,upd=0;
+ S.cbe={rows,file:f.name};FB.setDoc(FB.doc(db,'meta','cbe'),{rows,file:f.name}).catch(fbErr);let made=0,upd=0;
  [...new Set(rows.map(r=>r.item).filter(Boolean))].forEach(it=>{let id=findPos(it);
   if(!id){id=uid();const n=S.positions[id]=newPos(P());n.itemNo=it;n.title='One (1) '+rows.find(r=>r.item===it).pos.replace(TAIL,'');made++}
   if(syncExam(S.positions[id]))upd++});
@@ -420,48 +419,50 @@ $('#cbeFile').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,w
 
 
 /* ---- sign-in, roles, settings, printing ---- */
-const hash=async s=>{try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('caf:'+s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
- catch(e){let h=5381;for(const c of 'caf:'+s)h=(h*33)^c.charCodeAt(0);return'x'+(h>>>0).toString(16)}};
-const meName=()=>{try{return sessionStorage.getItem('caf.me')||''}catch(e){return''}};
-const me=()=>S.users.find(u=>u.user===meName());
-const isAdmin=()=>!!(me()&&me().role==='admin');
+const me=()=>S.me;
+const isAdmin=()=>!!(S.me&&S.me.role==='admin');
 const hdr=()=>{const H=S.settings.headers;return H.length?`<div class="hdr">${H.map(h=>`<img src="${h}" alt="" style="max-width:${Math.floor(96/H.length)}%">`).join('')}</div>`:''};
 function chrome(){const ad=isAdmin(),m=me();document.body.classList.toggle('user',!ad);
- const first=!S.users.length;$('#login').hidden=!!m;if(m){$('#lshow').checked=false;$('#lp').type='password'}
+ const first=INIT===false;$('#login').hidden=!!m;if(m){$('#lshow').checked=false;$('#lp').type='password'}
  $('#lh').textContent=first?'Create admin account':'Sign in';$('#lnW').hidden=!first;$('#lgo').textContent=first?'Create account':'Sign in';
- $('#lnote').textContent=first?'No accounts yet. The account you create here will be the administrator.':'Forgot your password? Ask an administrator to reset it.';
+ $('#lnote').textContent=STAT||(first?'No accounts yet. The account you create here will be the administrator.':'Forgot your password? Ask an administrator to create a new account for you.');
  if(!ad){view='caf';if(tab===0)tab=1}
  $('#side').innerHTML=[['caf','CAF'],['setup','SETUP'],['settings','SETTINGS']].filter(x=>ad||x[0]==='caf').map(([k,l])=>`<button class="sb${view===k?' on':''}" data-v="${k}">${l}</button>`).join('');
  ['caf','setup','settings'].forEach(k=>$('#v-'+k).hidden=view!==k);
- $('#who').innerHTML=m?`<span>${esc(m.name)} · ${m.role}</span><button class="btn ghost sm" id="out">Log out</button>`:'';}
+ $('#who').innerHTML=m?`<span>${esc(m.name)} · ${m.role}</span><button class="btn ghost sm" id="chpw">Change password</button><button class="btn ghost sm" id="out">Log out</button>`:'';}
 function settingsUI(){const H=S.settings.headers;
  $('#hdrBox').innerHTML=H.map((h,i)=>`<div class="thumb"><img src="${h}" alt=""><button data-hx="${i}" aria-label="Remove image">×</button></div>`).join('')+(H.length<8?'<label class="addimg"><span>+</span>Add image<input type="file" id="hdrFile" accept="image/png,image/jpeg" multiple hidden></label>':'');
  $('#hdrCount').textContent=`${H.length} of 8 used. You can pick several files at once.`;
- $('#usrBody').innerHTML=S.users.map((u,i)=>`<tr><td class="l">${esc(u.name)}</td><td class="l">${esc(u.user)}</td><td>${u.role}</td><td><button class="btn sm out" data-pw="${i}">Reset password</button> <button class="btn sm del" data-ux="${i}">Remove</button></td></tr>`).join('')||'<tr><td colspan="4" class="nf">No users yet.</td></tr>';
- $('#usrNote').textContent='Sign-in is required. Users see only the CAF page and can edit scores only; admins see everything.'}
+ $('#usrBody').innerHTML=S.users.map(u=>{const self=S.me&&u.uid===S.me.uid;return`<tr><td class="l">${esc(u.name)}</td><td class="l">${esc(u.user)}</td><td>${u.role}${u.disabled?' (disabled)':''}</td><td>${self?'You':`<button class="btn sm out" data-ur="${u.uid}">Make ${u.role==='admin'?'user':'admin'}</button> <button class="btn sm ${u.disabled?'out':'del'}" data-ud="${u.uid}">${u.disabled?'Enable':'Disable'}</button>`}</td></tr>`}).join('')||'<tr><td colspan="4" class="nf">No users yet.</td></tr>';
+ $('#usrNote').textContent='Accounts are stored in Firebase, so they work on every computer. Users see only the CAF page and can edit scores only; admins see everything.'}
 const shrink=f=>new Promise(res=>{const im=new Image();im.onload=()=>{const k=Math.min(1,1200/im.width,240/im.height),c=document.createElement('canvas');
  c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));c.getContext('2d').drawImage(im,0,0,c.width,c.height);
  res(c.toDataURL(f.type==='image/png'?'image/png':'image/jpeg',.88))};im.src=URL.createObjectURL(f)});
 document.addEventListener('change',async e=>{if(e.target.id!=='hdrFile')return;const H=S.settings.headers;
- for(const f of [...e.target.files].slice(0,8-H.length))H.push(await shrink(f));save();settingsUI();sheet()});
+ for(const f of [...e.target.files].slice(0,8-H.length)){const d=await shrink(f);if(d.length>900000){msg('That image is too large. Use a smaller image.');continue}H.push(d)}saveHeaders()});
 
-$('#lgo').onclick=async()=>{const err=t=>$('#le').textContent=t;
- if(!S.users.length){const name=cl($('#ln').value),user=cl($('#lu').value),pw=$('#lp').value;
-  if(!name||!user||pw.length<4)return err('Enter your name, a username and a password of at least 4 characters.');
-  S.users.push({name,user,role:'admin',pw:await hash(pw)});try{sessionStorage.setItem('caf.me',user)}catch(x){}
-  ['#ln','#lu','#lp'].forEach(q=>$(q).value='');err('');view='caf';save();all();return}
- const u=S.users.find(x=>x.user.toLowerCase()===$('#lu').value.trim().toLowerCase());
- if(u&&u.pw===await hash($('#lp').value)){try{sessionStorage.setItem('caf.me',u.user)}catch(x){}['#lu','#lp'].forEach(q=>$(q).value='');err('');view='caf';all()}
- else err('Wrong username or password.')};
+$('#lgo').onclick=async()=>{const err=t=>$('#le').textContent=t;if(!auth)return err(STAT||'Still connecting. Wait a moment and try again.');
+ const user=norm($('#lu').value),pw=$('#lp').value;
+ if(!USERRE.test(user))return err('Username: 3 to 30 letters or numbers (dot, dash and underscore are allowed), no spaces.');
+ if(INIT===false){const name=cl($('#ln').value);if(!name||pw.length<6)return err('Enter your name and a password of at least 6 characters.');
+  boot=true;
+  try{const c=await FB.createUserWithEmailAndPassword(auth,emailOf(user),pw),b=FB.writeBatch(db);
+   b.set(FB.doc(db,'meta','init'),{admin:c.user.uid,at:Date.now()});b.set(FB.doc(db,'users',c.user.uid),{name,user,role:'admin'});
+   try{await b.commit()}catch(x){try{await c.user.delete()}catch(y){}throw x}
+   INIT=true;boot=false;['#ln','#lu','#lp'].forEach(q=>$(q).value='');err('');await onAuth(c.user)}
+  catch(e){boot=false;err(mapErr(e))}return}
+ try{await FB.signInWithEmailAndPassword(auth,emailOf(user),pw);['#lu','#lp'].forEach(q=>$(q).value='');err('')}catch(e){err(mapErr(e))}};
 $('#lp').onkeydown=e=>{if(e.key==='Enter')$('#lgo').click()};
 $('#lshow').onchange=e=>$('#lp').type=e.target.checked?'text':'password';
 $('#ushow').onchange=e=>$('#upw').type=e.target.checked?'text':'password';
-$('#uadd').onclick=async()=>{const name=cl($('#un').value),user=cl($('#uu').value),pw=$('#upw').value,err=t=>$('#uerr').textContent=t;
- if(!name||!user||pw.length<4)return err('Enter a name, a username and a password of at least 4 characters.');
- if(S.users.some(u=>u.user.toLowerCase()===user.toLowerCase()))return err('That username is already taken.');
- const first=!S.users.length;S.users.push({name,user,role:first?'admin':$('#ur').value,pw:await hash(pw)});
- if(first)try{sessionStorage.setItem('caf.me',user)}catch(e){}
- ['#un','#uu','#upw'].forEach(q=>$(q).value='');err('');save();all()};
+$('#uadd').onclick=async()=>{const name=cl($('#un').value),user=norm($('#uu').value),pw=$('#upw').value,err=t=>$('#uerr').textContent=t;
+ if(!isAdmin()||!FB)return;
+ if(!name||!USERRE.test(user))return err('Enter a name and a username of 3 to 30 letters or numbers (no spaces).');
+ if(pw.length<6)return err('The password must be at least 6 characters.');
+ try{const a2=FB.getApps().find(x=>x.name==='adder')||FB.initializeApp(CFG,'adder'),au2=FB.getAuth(a2);
+  const c=await FB.createUserWithEmailAndPassword(au2,emailOf(user),pw);await FB.signOut(au2);
+  await FB.setDoc(FB.doc(db,'users',c.user.uid),{name,user,role:$('#ur').value});
+  ['#un','#uu','#upw'].forEach(q=>$(q).value='');err('Added '+name+'.')}catch(e){err(mapErr(e))}};
 
 const saveAs=(name,type,text)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()};
 const csv=A=>'\ufeff'+A.map(r=>r.map(v=>{v=String(v??'');return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')).join('\r\n');
@@ -473,11 +474,13 @@ $('#dCaf').onclick=()=>{const A=[['Plantilla Item Number','Vacant Position','Ran
 $('#dSc').onclick=()=>{const A=[['Plantilla Item Number','Name','Exam Raw Score','Exam Equiv. Score %','Exam Remarks','WS Raw Score','BEI A','BEI B','BEI C','BEI D','BEI E','Performance Rating','Performance Remarks']];
  Object.values(S.positions).forEach(p=>p.rows.filter(r=>r.name.trim()).forEach(r=>A.push([p.itemNo,r.name,r.raw,r.ex,r.exRem,r.ws,...r.b,r.pf,r.pfRem])));
  saveAs('scores.csv','text/csv',csv(A))};
-$('#dBk').onclick=()=>saveAs('comparative-assessment-backup.json','application/json',JSON.stringify(S,null,1));
+$('#dBk').onclick=()=>saveAs('comparative-assessment-backup.json','application/json',JSON.stringify({positions:S.positions,cbe:S.cbe,savedAt:new Date().toISOString()},null,1));
 $('#dRs').onclick=()=>$('#bkFile').click();
-$('#bkFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();
- r.onload=()=>{try{const x=JSON.parse(r.result);if(!x.positions||!x.positions[x.current])throw 0;if(!confirm('Replace everything on this page with the backup?'))return;
-  S=x;S.cbe??={rows:[],file:''};S.users??=[];S.settings??={headers:[]};save();all()}catch(z){alert('That file is not a backup from this page.')}};r.readAsText(f)};
+$('#bkFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f||!isAdmin())return;const r=new FileReader();
+ r.onload=()=>{try{const x=JSON.parse(r.result);if(!x.positions||typeof x.positions!=='object')throw 0;
+  if(!confirm('Replace all positions and scores with the backup?'))return;
+  const np={};for(const k in x.positions){const q=Object.assign(newPos(seedPos()),x.positions[k]);q.rows=(q.rows||[]).map(w=>({...blank(),...w,id:w.id||rid()}));np[k]=q}
+  S.positions=np;S.current=Object.keys(np).sort(byItem)[0]||'';save();all();msg('Backup restored. Saving to Firebase…')}catch(z){alert('That file is not a backup from this page.')}};r.readAsText(f)};
 
 const stripP=p=>({...p,rows:p.rows.filter(r=>r.name.trim()).map(r=>({...r,raw:'',ex:'',exRem:'',ws:'',b:['','','','',''],pf:'',pfRem:''}))});
 $('#pGo').onclick=()=>{const bl=$('#pCont').value==='blank',d=$('#pDoc').value,box=$('#printArea'),
@@ -488,13 +491,84 @@ $('#pGo').onclick=()=>{const bl=$('#pCont').value==='blank',d=$('#pDoc').value,b
  document.body.classList.add('printing');setTimeout(()=>window.print(),60)};
 window.onafterprint=()=>{document.body.classList.remove('printing');$('#printArea').innerHTML='';$('#pgStyle').textContent=''};
 
-/* Hooks for connecting to the BEI Tabulation results.
-   CAF.onSave = state => { ...write state to Firebase... }
-   CAF.setBEI('Juan Dela Cruz', [25,28,27,23,25])  fills raters A–E for that applicant in the selected position. */
-window.CAF={onSave:null,state:()=>S,
+/* ---- Firebase ---- */
+const CFG={apiKey:"AIzaSyDC_iGf6CSVXL9zQWhz7hsVQBOA17hvLRw",authDomain:"cbsua-caf.firebaseapp.com",projectId:"cbsua-caf",storageBucket:"cbsua-caf.firebasestorage.app",messagingSenderId:"632250643953",appId:"1:632250643953:web:a6d6164f7895bfd8764050"};
+let FB=null,app=null,auth=null,db=null,INIT,STAT='',boot=false,needRender=false,UN=[];
+const RAW={details:{},scores:{}},DIRTY={},TMR={},FIELDS=['raw','ex','exRem','ws','b0','b1','b2','b3','b4','pf','pfRem'];
+const USERRE=/^[a-z0-9._-]{3,30}$/,norm=v=>cl(v).toLowerCase(),emailOf=u=>u+'@caf.invalid';
+const getF=(r,f)=>/^b\d$/.test(f)?r.b[+f[1]]:r[f],setF=(r,f,v)=>{if(/^b\d$/.test(f))r.b[+f[1]]=v;else r[f]=v};
+const stab=o=>JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a<b?-1:a>b?1:0)):v);
+const byItem=(a,b)=>(S.positions[a].itemNo||'').localeCompare(S.positions[b].itemNo||'');
+const setPill=t=>{const e=$('#pill');if(e)e.textContent=t};
+const detailsDoc=p=>JSON.parse(JSON.stringify({title:p.title,itemNo:p.itemNo,date:p.date,wsDate:p.wsDate,beiDate:p.beiDate,edu:p.edu,exp:p.exp,trg:p.trg,elig:p.elig,w:p.w,max:p.max,sign:p.sign,rows:p.rows.map(r=>({id:r.id,name:r.name}))}));
+function mapErr(e){const c=(e&&e.code)||'';if(/api-key/.test(c))return 'The Firebase API key in this page is not valid. Check the config.';
+ return({'auth/invalid-credential':'Wrong username or password.','auth/wrong-password':'Wrong username or password.','auth/user-not-found':'Wrong username or password.','auth/invalid-login-credentials':'Wrong username or password.',
+ 'auth/email-already-in-use':'That username is already taken.','auth/weak-password':'The password must be at least 6 characters.','auth/too-many-requests':'Too many attempts. Wait a few minutes and try again.',
+ 'auth/network-request-failed':'No internet connection.','auth/operation-not-allowed':'Email/Password sign-in is not turned on in Firebase.','auth/requires-recent-login':'Please log in again first.',
+ 'permission-denied':'Not allowed by the Firestore rules.','unavailable':'No internet connection.'})[c]||c||String(e)}
+function fbErr(e){console.error(e);const c=(e&&e.code)||'';msg(c==='permission-denied'?'Not allowed by the Firestore rules. Check the rules and your role.':'Could not save or load: '+mapErr(e));setPill('Connection problem')}
+
+function rebuild(pid){const d=RAW.details[pid];if(!d)return;const sc=RAW.scores[pid]||{},old=S.positions[pid],dirty=DIRTY[pid]||new Set();
+ const rows=(d.rows||[]).map(x=>{const o=old&&old.rows.find(r=>r.id===x.id),r=blank(),m=sc[x.id]||{};r.id=x.id;r.name=x.name||'';
+  FIELDS.forEach(f=>setF(r,f,dirty.has(x.id+'.'+f)&&o?getF(o,f):(m[f]??'')));return r});
+ S.positions[pid]=Object.assign(newPos(seedPos()),d,{rows})}
+async function flushScores(pid){const p=S.positions[pid];if(!p||!db)return;delete DIRTY[pid];const prev=RAW.scores[pid]||{},patch={};
+ p.rows.forEach(r=>FIELDS.forEach(f=>{const v=getF(r,f)??'',pv=(prev[r.id]&&prev[r.id][f])??'';if(String(v)!==String(pv))(patch[r.id]??={})[f]=v}));
+ if(!Object.keys(patch).length)return;
+ const m=RAW.scores[pid]=JSON.parse(JSON.stringify(prev));for(const id in patch)Object.assign(m[id]??={},patch[id]);
+ await FB.setDoc(FB.doc(db,'scores',pid),patch,{merge:true})}
+const scoresSoon=pid=>{clearTimeout(TMR[pid]);TMR[pid]=setTimeout(()=>flushScores(pid).catch(fbErr),400)};
+const dirtyScore=(pid,r,f)=>{(DIRTY[pid]??=new Set()).add(r.id+'.'+f);scoresSoon(pid)};
+async function syncAll(){if(!db||!isAdmin())return;if(syncAll.run){syncAll.again=true;return}syncAll.run=true;
+ try{for(const pid of Object.keys(S.positions)){const p=S.positions[pid],d=detailsDoc(p);
+   if(stab(d)!==stab(RAW.details[pid])){RAW.details[pid]=d;await FB.setDoc(FB.doc(db,'positions',pid),d)}
+   await flushScores(pid)}
+  for(const pid of Object.keys(RAW.details))if(!S.positions[pid]){delete RAW.details[pid];delete RAW.scores[pid];
+   await FB.deleteDoc(FB.doc(db,'positions',pid));await FB.deleteDoc(FB.doc(db,'scores',pid))}
+ }catch(e){fbErr(e)}
+ syncAll.run=false;if(syncAll.again){syncAll.again=false;syncAll()}}
+async function saveHeaders(){const H=S.settings.headers;settingsUI();sheet();
+ try{const b=FB.writeBatch(db);for(let i=0;i<8;i++){const ref=FB.doc(db,'headers','h'+i);H[i]?b.set(ref,{i,data:H[i]}):b.delete(ref)}await b.commit()}catch(e){fbErr(e)}}
+
+const typing=()=>{const a=document.activeElement;return!!a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!$('#login').contains(a)};
+const ensureCur=()=>{if(!S.positions[S.current])S.current=Object.keys(S.positions).sort(byItem)[0]||''};
+function soft(){const p=P();document.querySelectorAll('#sheet tr[data-i]').forEach(tr=>{const r=p.rows[+tr.dataset.i];if(!r)return;
+  tr.querySelectorAll('input[data-f]').forEach(i=>{if(i===document.activeElement)return;const v=getF(r,i.dataset.f)??'';if(String(i.value)!==String(v))i.value=v})});
+ upd();if(TABS[tab]==='CAF')sheet()}
+function afterSnap(structural){ensureCur();if(typing()){if(structural)needRender=true;else soft();return}all()}
+document.addEventListener('focusout',e=>{if(!needRender)return;const n=e.relatedTarget;if(n&&/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName))return;
+ needRender=false;setTimeout(()=>{if(!typing())all();else needRender=true},0)});
+
+function stopListen(){UN.forEach(f=>{try{f()}catch(e){}});UN=[];RAW.details={};RAW.scores={};S.positions={};S.users=[];S.cbe={rows:[],file:''};S.settings={headers:[]}}
+function startListen(){stopListen();const ad=isAdmin(),on=(q,f)=>UN.push(FB.onSnapshot(q,f,fbErr));
+ on(FB.collection(db,'positions'),snap=>{snap.docChanges().forEach(c=>{const id=c.doc.id;
+   if(c.type==='removed'){delete RAW.details[id];delete RAW.scores[id];delete S.positions[id];return}
+   const cur=S.positions[id],dirty=cur&&stab(detailsDoc(cur))!==stab(RAW.details[id]);RAW.details[id]=c.doc.data();if(!dirty)rebuild(id)});afterSnap(1)});
+ on(FB.collection(db,'scores'),snap=>{snap.docChanges().forEach(c=>{const id=c.doc.id;RAW.scores[id]=c.type==='removed'?{}:c.doc.data();rebuild(id)});afterSnap(0)});
+ on(FB.collection(db,'headers'),snap=>{S.settings.headers=snap.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i).map(x=>x.data);afterSnap(1)});
+ on(FB.doc(db,'users',S.me.uid),s=>{if(!s.exists()||s.data().disabled)return FB.signOut(auth);if(s.data().role!==S.me.role){S.me={...S.me,...s.data()};startListen();all()}});
+ if(ad){on(FB.collection(db,'users'),snap=>{S.users=snap.docs.map(d=>({uid:d.id,...d.data()})).sort((a,b)=>(a.name||'').localeCompare(b.name||''));afterSnap(1)});
+  on(FB.doc(db,'meta','cbe'),s=>{S.cbe=s.exists()?{rows:s.data().rows||[],file:s.data().file||''}:{rows:[],file:''};afterSnap(1)})}
+ setPill('Live · Firebase')}
+async function onAuth(u){if(boot)return;
+ if(!u){stopListen();S.me=null;view='caf';setPill('Signed out');all();return}
+ try{const s=await FB.getDoc(FB.doc(db,'users',u.uid));
+  if(!s.exists()||s.data().disabled){await FB.signOut(auth);$('#le').textContent='This account has no access. Ask an administrator.';return}
+  S.me={uid:u.uid,...s.data()};$('#le').textContent='';startListen();all()}
+ catch(e){await FB.signOut(auth);$('#le').textContent=mapErr(e)}}
+async function fbStart(){try{setPill('Connecting…');STAT='Connecting to Firebase…';chrome();
+  const U='https://www.gstatic.com/firebasejs/10.14.1/',[A,B,C]=await Promise.all([import(U+'firebase-app.js'),import(U+'firebase-auth.js'),import(U+'firebase-firestore.js')]);
+  FB={...A,...B,...C};app=FB.initializeApp(CFG);auth=FB.getAuth(app);db=FB.getFirestore(app);
+  try{INIT=(await FB.getDoc(FB.doc(db,'meta','init'))).exists();STAT=''}
+  catch(e){INIT=null;STAT=e.code==='permission-denied'?'The Firestore rules are not published yet. Publish them in the Firebase console, then reload this page.':mapErr(e)}
+  chrome();setPill('Signed out');await FB.setPersistence(auth,FB.browserSessionPersistence);FB.onAuthStateChanged(auth,onAuth)}
+ catch(e){STAT='Could not start Firebase: '+mapErr(e);chrome();setPill('Offline')}}
+
+/* CAF.setBEI('Juan Dela Cruz',[25,28,27,23,25]) fills raters A–E for that applicant in the selected position and saves it. */
+window.CAF={state:()=>S,
  setBEI(name,ratings){const r=P().rows.find(x=>x.name.trim().toLowerCase()===String(name).trim().toLowerCase());
-  if(!r)return false;r.b=[0,1,2,3,4].map(i=>ratings[i]??'');save();sheet();return true}};
-all();
+  if(!r)return false;r.b=[0,1,2,3,4].map(i=>ratings[i]??'');r.b.forEach((_,i)=>(DIRTY[S.current]??=new Set()).add(r.id+'.b'+i));scoresSoon(S.current);sheet();return true}};
+all();fbStart();
 </script>
 </body>
 </html>
