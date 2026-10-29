@@ -486,17 +486,17 @@ $('#uadd').onclick=async()=>{const name=cl($('#un').value),user=norm($('#uu').va
   await FB.setDoc(FB.doc(db,'users',c.user.uid),{name,user,role:$('#ur').value});
   ['#un','#uu','#upw'].forEach(q=>$(q).value='');err('Added '+name+'.')}catch(e){err(mapErr(e))}};
 
-const saveAs=(name,type,text)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()};
+const saveFile=(name,type,text)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()};
 const csv=A=>'\ufeff'+A.map(r=>r.map(v=>{v=String(v??'');return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')).join('\r\n');
 function ranked(p){const rs=p.rows.map(r=>({r,c:calc(p,r)})).filter(x=>x.r.name.trim()||x.c.any),t=x=>Math.round(x.c.tot*1e4)/1e4,al=rs.filter(x=>x.c.any).map(t);
  rs.forEach(x=>{if(x.c.any){const v=t(x);x.k=1+al.filter(a=>a>v).length+(al.filter(a=>a===v).length-1)/2}else x.k=''});return rs}
 $('#dCaf').onclick=()=>{const A=[['Plantilla Item Number','Vacant Position','Rank','Name','Exam Equiv. Score','Written Exam Points','Work Sample Points','BEI Points','Sub-total','Performance Points','Total Earned Points','Remarks']];
  Object.values(S.positions).forEach(p=>ranked(p).forEach(x=>A.push([p.itemNo,p.title,x.k,x.r.name,x.r.ex,fmt(x.c.exP),fmt(x.c.wsP),fmt(x.c.bP),x.c.any?fmt(x.c.sub):'',fmt(x.c.pfP),x.c.any?fmt(x.c.tot):'',x.r.exRem])));
- saveAs('caf-results.csv','text/csv',csv(A))};
+ saveFile('caf-results.csv','text/csv',csv(A))};
 $('#dSc').onclick=()=>{const A=[['Plantilla Item Number','Name','Exam Raw Score','Exam Equiv. Score %','Exam Remarks','WS Raw Score','BEI A','BEI B','BEI C','BEI D','BEI E','Performance Rating','Performance Remarks']];
  Object.values(S.positions).forEach(p=>p.rows.filter(r=>r.name.trim()).forEach(r=>A.push([p.itemNo,r.name,r.raw,r.ex,r.exRem,r.ws,...r.b,r.pf,r.pfRem])));
- saveAs('scores.csv','text/csv',csv(A))};
-$('#dBk').onclick=()=>saveAs('comparative-assessment-backup.json','application/json',JSON.stringify({positions:S.positions,cbe:S.cbe,savedAt:new Date().toISOString()},null,1));
+ saveFile('scores.csv','text/csv',csv(A))};
+$('#dBk').onclick=()=>saveFile('comparative-assessment-backup.json','application/json',JSON.stringify({positions:S.positions,cbe:S.cbe,savedAt:new Date().toISOString()},null,1));
 $('#dRs').onclick=()=>$('#bkFile').click();
 $('#bkFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f||!isAdmin())return;const r=new FileReader();
  r.onload=()=>{try{const x=JSON.parse(r.result);if(!x.positions||typeof x.positions!=='object')throw 0;
