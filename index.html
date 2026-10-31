@@ -375,7 +375,7 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
   try{await FB.updateDoc(FB.doc(db,'users',id),t.dataset.ud!==undefined?{disabled:!u.disabled}:{role:u.role==='admin'?'user':'admin'})}catch(e){$('#uerr').textContent=mapErr(e)}return}
  if(a&&!isAdmin())return;
  if(a==='cbeUp')return $('#cbeFile').click();
- if(a==='cbeThis'){cbeQ=p.itemNo||'';return sheet()}
+ if(a==='cbeThis'){cbeQ=codeOf(p.itemNo);return sheet()}
  if(a==='cbeAll'){cbeQ='';return sheet()}
  if(a==='fill'){const n=syncExam(p);save();sheet();return msg(n?`Filled ${n} applicants from the CBE scores.`:'No CBE rows match this item number. Upload the CBE scores first and check the item number.')}
  if(a==='add')p.rows.push(blank());else if(a==='add5')for(let i=0;i<5;i++)p.rows.push(blank());
@@ -391,9 +391,11 @@ $('#del').onclick=()=>{if(!S.positions[S.current]||!confirm('Delete this positio
 const cl=v=>String(v??'').replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
 const msg=t=>{$('#msg').textContent=t;$('#msg2').textContent=t};
 const needX=()=>typeof XLSX==='undefined'?(msg('The Excel library could not load. Check your internet connection and reload the page.'),1):0;
-const findPos=it=>Object.keys(S.positions).find(id=>cl(S.positions[id].itemNo).toLowerCase()===cl(it).toLowerCase());
+const findPos=it=>Object.keys(S.positions).find(id=>codeOf(S.positions[id].itemNo).toLowerCase()===codeOf(it).toLowerCase());
 const xd=v=>typeof v==='number'?new Date(Math.round((v-25569)*864e5)).toISOString().slice(0,10):cl(v);
 const ITEM=/\(([^()]*-\d+-\d{4})\)\s*$/,TAIL=/\s*\([^()]*-\d+-\d{4}\)\s*$/;
+const codeOf=v=>{const m=cl(v).match(ITEM);return m?m[1]:cl(v)};
+const normItem=p=>{const t=cl(p.itemNo),m=t.match(ITEM);if(m&&t!==m[1]){if(!cl(p.title))p.title='One (1) '+t.replace(TAIL,'');p.itemNo=m[1]}};
 const PCOLS=[['Plantilla Item Number','itemNo'],['Education','edu'],['Experience','exp'],['Training','trg'],['Eligibility','elig']];
 const RCOLS=[...PCOLS,['Vacant Position','title'],['Education Requirements','edu'],['Experience Requirements','exp'],['Training Requirements','trg'],['Eligibility Requirements','elig']];
 const sj=(wb,n)=>wb.Sheets[n]?XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''}):[];
@@ -405,7 +407,7 @@ function cbeCalc(x){const v=num(x.v),n=num(x.n),a=num(x.a),cb=num(x.cbt),of=num(
  const p=[ap===null?null:ap*.2,cp===null?null:cp*.4,op===null?null:op*.4],f=p.filter(z=>z!==null);
  const cum=f.length?f.reduce((q,z)=>q+z,0):null,none=cum===null||cum===0;
  return{as,ap,cp,op,p,cum,none,raw:(as||0)+(cb||0)+(of||0),rem:none?'DID NOT TAKE THE EXAM':cum>=60?'PASS':'FAIL'}}
-function syncExam(p){const it=cl(p.itemNo).toLowerCase(),L=it?S.cbe.rows.filter(x=>x.item.toLowerCase()===it):[];if(!L.length)return 0;
+function syncExam(p){const it=codeOf(p.itemNo).toLowerCase(),L=it?S.cbe.rows.filter(x=>x.item.toLowerCase()===it):[];if(!L.length)return 0;
  const key=n=>cl(n).toLowerCase(),old=new Map(p.rows.map(r=>[key(r.name),r])),used=new Set();
  const out=L.map(x=>{const c=cbeCalc(x),nm=`${x.last}, ${x.first}`;let r=old.get(key(nm));if(!r||used.has(r))r=blank();used.add(r);
   return Object.assign(r,{name:nm,raw:c.none?'':c.raw,ex:c.none?'':+c.cum.toFixed(4),exRem:c.rem==='PASS'?'':c.none?'Did Not Take Exam':'Failed'})});
@@ -424,7 +426,7 @@ $('#up').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,wb=>{let made=0,upd=0;
  sj(wb,wb.SheetNames.includes('Positions')?'Positions':wb.SheetNames[0]).forEach(o=>{const it=cl(o['Plantilla Item Number']);if(!it)return;let id=findPos(it),p;
   if(id){p=S.positions[id];upd++}else{id=uid();p=S.positions[id]=newPos(P());made++}
-  RCOLS.forEach(([h,k])=>{const v=o[h];if(v===''||v===undefined)return;set(p,k,k==='elig'?String(v).trim():cl(v))})});
+  RCOLS.forEach(([h,k])=>{const v=o[h];if(v===''||v===undefined)return;set(p,k,k==='elig'?String(v).trim():cl(v))});normItem(p)});
  if(!made&&!upd)return msg('Nothing to import. The first sheet needs a "Plantilla Item Number" column with one row per position.');
  save();all();msg(`Uploaded: ${made} new and ${upd} updated positions.`)})};
 $('#cbeFile').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,wb=>{
@@ -432,11 +434,12 @@ $('#cbeFile').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,w
  A.slice(2).forEach(r=>{const last=cl(r[1]),pos=cl(r[3]);if(!last||!pos||last==='LAST NAME')return;const m=pos.match(ITEM);
   rows.push({no:r[0],last,first:cl(r[2]),pos,item:m?m[1]:'',v:r[4],n:r[5],a:r[6],cbt:r[9],off:r[11]})});
  if(!rows.length)return msg('No applicants found. Expected a "Final CBE Scores" sheet with the usual columns.');
+ if(!rows.some(r=>r.item))return msg(`This file does not look like the CBE results sheet: none of its ${rows.length} rows has an item number in brackets at the end of the position (like (CSSACB-ADOF1-57-2026)). Nothing was changed. Upload the full workbook that has the "Final CBE Scores" sheet.`);
  S.cbe={rows,file:f.name};FB.setDoc(FB.doc(db,'meta','cbe'),{rows,file:f.name}).catch(fbErr);let made=0,upd=0;
  [...new Set(rows.map(r=>r.item).filter(Boolean))].forEach(it=>{let id=findPos(it);
   if(!id){id=uid();const n=S.positions[id]=newPos(P());n.itemNo=it;n.title='One (1) '+rows.find(r=>r.item===it).pos.replace(TAIL,'');made++}
   if(syncExam(S.positions[id]))upd++});
- save();all();msg(`Loaded ${rows.length} CBE rows. ${made} new positions created and Exam Results filled for ${upd} positions.`)})};
+ save();all();msg(`Loaded ${rows.length} CBE rows. ${made} new positions created and Exam Results filled for ${upd} positions.${rows.some(r=>!r.item)?' '+rows.filter(r=>!r.item).length+' rows without an item number were skipped.':''}`)})};
 
 
 /* ---- sign-in, roles, settings, printing ---- */
@@ -528,7 +531,7 @@ function mapErr(e){const c=(e&&e.code)||'';if(/api-key/.test(c))return 'The Fire
  'auth/email-already-in-use':'That username is already taken.','auth/weak-password':'The password must be at least 6 characters.','auth/too-many-requests':'Too many attempts. Wait a few minutes and try again.',
  'auth/network-request-failed':'No internet connection.','auth/operation-not-allowed':'Email/Password sign-in is not turned on in Firebase.','auth/requires-recent-login':'Please log in again first.',
  'permission-denied':'Not allowed by the Firestore rules.','unavailable':'No internet connection.'})[c]||c||String(e)}
-function fbErr(e){console.error(e);const c=(e&&e.code)||'';msg(c==='permission-denied'?'Not allowed by the Firestore rules. Check the rules and your role.':'Could not save or load: '+mapErr(e));setPill('Connection problem')}
+function fbErr(e,l){console.error(e);const c=(e&&e.code)||'';msg(c==='permission-denied'?'Not allowed by the Firestore rules'+(l?' (reading "'+l+'")':' (while saving)')+'. Check that the latest rules are published and that your role is correct.':'Could not save or load: '+mapErr(e));setPill('Connection problem')}
 
 function rebuild(pid){const d=RAW.details[pid];if(!d)return;const sc=RAW.scores[pid]||{},old=S.positions[pid],dirty=DIRTY[pid]||new Set();
  const rows=(d.rows||[]).map(x=>{const o=old&&old.rows.find(r=>r.id===x.id),r=blank(),m=sc[x.id]||{};r.id=x.id;r.name=x.name||'';
@@ -557,12 +560,14 @@ const ensureCur=()=>{if(!S.positions[S.current])S.current=Object.keys(S.position
 function soft(){const p=P();document.querySelectorAll('#sheet tr[data-i]').forEach(tr=>{const r=p.rows[+tr.dataset.i];if(!r)return;
   tr.querySelectorAll('input[data-f]').forEach(i=>{if(i===document.activeElement)return;const v=getF(r,i.dataset.f)??'';if(String(i.value)!==String(v))i.value=v})});
  upd();if(TABS[tab]==='CAF')sheet()}
-function afterSnap(structural){ensureCur();if(typing()){if(structural)needRender=true;else soft();return}all()}
+function autoFix(){if(!isAdmin())return;let ch=0;for(const pid in S.positions){const p=S.positions[pid],b=p.itemNo;normItem(p);if(p.itemNo!==b)ch++}
+ if(ch){save();setTimeout(()=>msg(`Cleaned up the item numbers of ${ch} positions.`),0)}}
+function afterSnap(structural){ensureCur();autoFix();if(typing()){if(structural)needRender=true;else soft();return}all()}
 document.addEventListener('focusout',e=>{if(!needRender)return;const n=e.relatedTarget;if(n&&/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName))return;
  needRender=false;setTimeout(()=>{if(!typing())all();else needRender=true},0)});
 
 function stopListen(){UN.forEach(f=>{try{f()}catch(e){}});UN=[];RAW.details={};RAW.scores={};S.positions={};S.users=[];S.cbe={rows:[],file:''};S.settings={headers:[]}}
-function startListen(){stopListen();const ad=isAdmin(),on=(q,f)=>UN.push(FB.onSnapshot(q,f,fbErr));
+function startListen(){stopListen();const ad=isAdmin(),on=(q,f)=>UN.push(FB.onSnapshot(q,f,e=>fbErr(e,q.path)));
  on(FB.collection(db,'positions'),snap=>{snap.docChanges().forEach(c=>{const id=c.doc.id;
    if(c.type==='removed'){delete RAW.details[id];delete RAW.scores[id];delete S.positions[id];return}
    const cur=S.positions[id],dirty=cur&&stab(detailsDoc(cur))!==stab(RAW.details[id]);RAW.details[id]=c.doc.data();if(!dirty)rebuild(id)});afterSnap(1)});
@@ -576,7 +581,7 @@ async function onAuth(u){if(boot)return;
  if(!u){stopListen();S.me=null;view='caf';setPill('Signed out');all();return}
  try{const s=await FB.getDoc(FB.doc(db,'users',u.uid));
   if(!s.exists()||s.data().disabled){await FB.signOut(auth);$('#le').textContent='This account has no access. Ask an administrator.';return}
-  S.me={uid:u.uid,...s.data()};$('#le').textContent='';startListen();all()}
+  S.me={uid:u.uid,...s.data()};$('#le').textContent='';msg('');startListen();all()}
  catch(e){await FB.signOut(auth);$('#le').textContent=mapErr(e)}}
 async function fbStart(){try{setPill('Connecting…');STAT='Connecting to Firebase…';chrome();
   const U='https://www.gstatic.com/firebasejs/10.14.1/',[A,B,C]=await Promise.all([import(U+'firebase-app.js'),import(U+'firebase-auth.js'),import(U+'firebase-firestore.js')]);
