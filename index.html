@@ -309,7 +309,7 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
  if(T==='CBE Scores'){h=LH('CBE SCORES')+`<div class="c t3">Competency-Based Exam results of all applicants</div>
   <div class="np row" style="margin:14px 0 4px"><button class="btn sm" data-act="cbeUp">Upload CBE scores (.xlsx)</button>
   <label>Filter by name or item number<input data-q value="${esc(cbeQ)}" placeholder="e.g. CSSACB-UEXSP1-18-2026"></label>
-  <button class="btn sm out" data-act="cbeThis">This position only</button><button class="btn sm out" data-act="cbeAll">Show all</button></div><div id="cbeT"></div>`}
+  <button class="btn sm out" data-act="cbeThis">This position only</button><button class="btn sm out" data-act="cbeAll">Show all</button><button class="btn sm out" data-act="fillall">Fill all positions from CBE</button></div><div id="cbeT"></div>`}
  else if(T==='CAF'){
   const rows=R.map((r,i)=>({r,c:C[i]})).filter(x=>x.r.name.trim()||x.c.any),tt=x=>Math.round(x.c.tot*1e4)/1e4,al=rows.filter(x=>x.c.any).map(tt);
   const rank=x=>{if(!x.c.any)return'';const v=tt(x);return 1+al.filter(a=>a>v).length+(al.filter(a=>a===v).length-1)/2};
@@ -377,6 +377,7 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  if(a==='cbeUp')return $('#cbeFile').click();
  if(a==='cbeThis'){cbeQ=codeOf(p.itemNo);return sheet()}
  if(a==='cbeAll'){cbeQ='';return sheet()}
+ if(a==='fillall'){let n=0,pp=0;for(const id in S.positions){const k=syncExam(S.positions[id]);if(k){n+=k;pp++}}save();sheet();return msg(`Filled ${n} applicants in ${pp} positions from the CBE scores.`)}
  if(a==='fill'){const n=syncExam(p);save();sheet();return msg(n?`Filled ${n} applicants from the CBE scores.`:'No CBE rows match this item number. Upload the CBE scores first and check the item number.')}
  if(a==='add')p.rows.push(blank());else if(a==='add5')for(let i=0;i<5;i++)p.rows.push(blank());
  else if(a==='del'){p.rows.splice(+t.closest('tr').dataset.i,1);if(!p.rows.length)p.rows.push(blank())}else return;
@@ -535,7 +536,8 @@ function mapErr(e){const c=(e&&e.code)||'';if(/api-key/.test(c))return 'The Fire
  'permission-denied':'Not allowed by the Firestore rules.','unavailable':'No internet connection.'})[c]||c||String(e)}
 function fbErr(e,l){console.error(e);const c=(e&&e.code)||'';msg(c==='permission-denied'?'Not allowed by the Firestore rules'+(l?' (reading "'+l+'")':' (while saving)')+'. Check that the latest rules are published and that your role is correct.':'Could not save or load: '+mapErr(e));setPill('Connection problem')}
 
-function rebuild(pid){const d=RAW.details[pid];if(!d)return;const sc=RAW.scores[pid]||{},old=S.positions[pid],dirty=DIRTY[pid]||new Set();
+function diffKeys(pid){const p=S.positions[pid],sc=RAW.scores[pid]||{},k=new Set();if(p)p.rows.forEach(r=>FIELDS.forEach(f=>{if(String(getF(r,f)??'')!==String((sc[r.id]&&sc[r.id][f])??''))k.add(r.id+'.'+f)}));return k}
+function rebuild(pid,keep){const d=RAW.details[pid];if(!d)return;const sc=RAW.scores[pid]||{},old=S.positions[pid],dirty=new Set([...(DIRTY[pid]||[]),...(keep||[])]);
  const rows=(d.rows||[]).map(x=>{const o=old&&old.rows.find(r=>r.id===x.id),r=blank(),m=sc[x.id]||{};r.id=x.id;r.name=x.name||'';
   FIELDS.forEach(f=>setF(r,f,dirty.has(x.id+'.'+f)&&o?getF(o,f):(m[f]??'')));return r});
  S.positions[pid]=Object.assign(newPos(seedPos()),d,{rows})}
@@ -565,8 +567,9 @@ function soft(){const p=P();document.querySelectorAll('#sheet tr[data-i]').forEa
 function autoFix(){if(!isAdmin())return;let ch=0;
  for(const pid in S.positions){const p=S.positions[pid],b=p.itemNo,t=p.title;normItem(p);
   if(!cl(p.title)&&S.cbe.rows.length){const r=S.cbe.rows.find(x=>x.item&&x.item.toLowerCase()===codeOf(p.itemNo).toLowerCase());if(r)p.title='One (1) '+r.pos.replace(TAIL,'')}
+  if(S.cbe.rows.length&&p.rows.some(r=>r.name.trim())&&p.rows.every(r=>String(r.raw)===''&&String(r.ex)==='')){const k=JSON.stringify(p.rows.map(r=>[r.raw,r.ex,r.exRem]));syncExam(p);if(JSON.stringify(p.rows.map(r=>[r.raw,r.ex,r.exRem]))!==k)ch++}
   if(p.itemNo!==b||p.title!==t)ch++}
- if(ch){save();setTimeout(()=>msg(`Updated the item numbers and titles of ${ch} positions.`),0)}}
+ if(ch){save();setTimeout(()=>msg(`Repaired ${ch} positions (item numbers, titles or exam scores).`),0)}}
 function afterSnap(structural){ensureCur();autoFix();if(typing()){if(structural)needRender=true;else soft();return}all()}
 document.addEventListener('focusout',e=>{if(!needRender)return;const n=e.relatedTarget;if(n&&/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName))return;
  needRender=false;setTimeout(()=>{if(!typing())all();else needRender=true},0)});
@@ -575,8 +578,8 @@ function stopListen(){UN.forEach(f=>{try{f()}catch(e){}});UN=[];RAW.details={};R
 function startListen(){stopListen();const ad=isAdmin(),on=(q,f)=>UN.push(FB.onSnapshot(q,f,e=>fbErr(e,q.path)));
  on(FB.collection(db,'positions'),snap=>{snap.docChanges().forEach(c=>{const id=c.doc.id;
    if(c.type==='removed'){delete RAW.details[id];delete RAW.scores[id];delete S.positions[id];return}
-   const cur=S.positions[id],dirty=cur&&stab(detailsDoc(cur))!==stab(RAW.details[id]);RAW.details[id]=c.doc.data();if(!dirty)rebuild(id)});afterSnap(1)});
- on(FB.collection(db,'scores'),snap=>{snap.docChanges().forEach(c=>{const id=c.doc.id;RAW.scores[id]=c.type==='removed'?{}:c.doc.data();rebuild(id)});afterSnap(0)});
+   const cur=S.positions[id],dirty=cur&&stab(detailsDoc(cur))!==stab(RAW.details[id]);RAW.details[id]=c.doc.data();if(!dirty)rebuild(id,diffKeys(id))});afterSnap(1)});
+ on(FB.collection(db,'scores'),snap=>{snap.docChanges().forEach(c=>{const id=c.doc.id,keep=diffKeys(id);RAW.scores[id]=c.type==='removed'?{}:c.doc.data();rebuild(id,keep)});afterSnap(0)});
  on(FB.collection(db,'headers'),snap=>{S.settings.headers=snap.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i).map(x=>x.data);afterSnap(1)});
  on(FB.doc(db,'users',S.me.uid),s=>{if(!s.exists()||s.data().disabled)return FB.signOut(auth);if(s.data().role!==S.me.role){S.me={...S.me,...s.data()};startListen();all()}});
  if(ad){on(FB.collection(db,'users'),snap=>{S.users=snap.docs.map(d=>({uid:d.id,...d.data()})).sort((a,b)=>(a.name||'').localeCompare(b.name||''));afterSnap(1)});
