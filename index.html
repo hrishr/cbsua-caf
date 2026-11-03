@@ -287,7 +287,7 @@ function calc(p,r){
 
 function options(){[['#flt','#sel'],['#flt2','#sel2']].forEach(([fi,se])=>{const f=$(fi).value.toLowerCase();
  const ids=Object.keys(S.positions).sort(byItem).filter(id=>id===S.current||(S.positions[id].itemNo+' '+S.positions[id].title).toLowerCase().includes(f));
- $(se).innerHTML=ids.map(id=>{const p=S.positions[id];return`<option value="${id}"${id===S.current?' selected':''}>${esc(p.itemNo||p.title||'Untitled position')}</option>`}).join('')})}
+ $(se).innerHTML=ids.map(id=>{const p=S.positions[id];return`<option value="${id}"${id===S.current?' selected':''}>${esc(posLabel(p))}</option>`}).join('')})}
 function fields(){document.querySelectorAll('[data-k]').forEach(e=>e.value=get(P(),e.dataset.k)??'');head()}
 function head(){const p=P();$('#h1').textContent=p.title||'New position';
  const s=['ex','ws','bei','pf'].reduce((a,k)=>a+(num(p.w[k])||0),0);
@@ -438,6 +438,7 @@ $('#cbeFile').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,w
  S.cbe={rows,file:f.name};FB.setDoc(FB.doc(db,'meta','cbe'),{rows,file:f.name}).catch(fbErr);let made=0,upd=0;
  [...new Set(rows.map(r=>r.item).filter(Boolean))].forEach(it=>{let id=findPos(it);
   if(!id){id=uid();const n=S.positions[id]=newPos(P());n.itemNo=it;n.title='One (1) '+rows.find(r=>r.item===it).pos.replace(TAIL,'');made++}
+  else if(!cl(S.positions[id].title))S.positions[id].title='One (1) '+rows.find(r=>r.item===it).pos.replace(TAIL,'');
   if(syncExam(S.positions[id]))upd++});
  save();all();msg(`Loaded ${rows.length} CBE rows. ${made} new positions created and Exam Results filled for ${upd} positions.${rows.some(r=>!r.item)?' '+rows.filter(r=>!r.item).length+' rows without an item number were skipped.':''}`)})};
 
@@ -523,6 +524,7 @@ const RAW={details:{},scores:{}},DIRTY={},TMR={},FIELDS=['raw','ex','exRem','ws'
 const USERRE=/^[a-z0-9._-]{3,30}$/,norm=v=>cl(v).toLowerCase(),emailOf=(u,g=0)=>u+(g?'+'+g:'')+'@caf.invalid';
 const getF=(r,f)=>/^b\d$/.test(f)?r.b[+f[1]]:r[f],setF=(r,f,v)=>{if(/^b\d$/.test(f))r.b[+f[1]]=v;else r[f]=v};
 const stab=o=>JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a<b?-1:a>b?1:0)):v);
+const posLabel=p=>{const t=cl(p.title).replace(/^[A-Za-z]+\s*\(\d+\)\s*/,''),c=cl(p.itemNo);return t&&c?`${t} (${c})`:(c||t||'Untitled position')};
 const byItem=(a,b)=>(S.positions[a].itemNo||'').localeCompare(S.positions[b].itemNo||'');
 const setPill=t=>{const e=$('#pill');if(e)e.textContent=t};
 const detailsDoc=p=>JSON.parse(JSON.stringify({title:p.title,itemNo:p.itemNo,date:p.date,wsDate:p.wsDate,beiDate:p.beiDate,edu:p.edu,exp:p.exp,trg:p.trg,elig:p.elig,w:p.w,max:p.max,sign:p.sign,rows:p.rows.map(r=>({id:r.id,name:r.name}))}));
@@ -560,8 +562,11 @@ const ensureCur=()=>{if(!S.positions[S.current])S.current=Object.keys(S.position
 function soft(){const p=P();document.querySelectorAll('#sheet tr[data-i]').forEach(tr=>{const r=p.rows[+tr.dataset.i];if(!r)return;
   tr.querySelectorAll('input[data-f]').forEach(i=>{if(i===document.activeElement)return;const v=getF(r,i.dataset.f)??'';if(String(i.value)!==String(v))i.value=v})});
  upd();if(TABS[tab]==='CAF')sheet()}
-function autoFix(){if(!isAdmin())return;let ch=0;for(const pid in S.positions){const p=S.positions[pid],b=p.itemNo;normItem(p);if(p.itemNo!==b)ch++}
- if(ch){save();setTimeout(()=>msg(`Cleaned up the item numbers of ${ch} positions.`),0)}}
+function autoFix(){if(!isAdmin())return;let ch=0;
+ for(const pid in S.positions){const p=S.positions[pid],b=p.itemNo,t=p.title;normItem(p);
+  if(!cl(p.title)&&S.cbe.rows.length){const r=S.cbe.rows.find(x=>x.item&&x.item.toLowerCase()===codeOf(p.itemNo).toLowerCase());if(r)p.title='One (1) '+r.pos.replace(TAIL,'')}
+  if(p.itemNo!==b||p.title!==t)ch++}
+ if(ch){save();setTimeout(()=>msg(`Updated the item numbers and titles of ${ch} positions.`),0)}}
 function afterSnap(structural){ensureCur();autoFix();if(typing()){if(structural)needRender=true;else soft();return}all()}
 document.addEventListener('focusout',e=>{if(!needRender)return;const n=e.relatedTarget;if(n&&/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName))return;
  needRender=false;setTimeout(()=>{if(!typing())all();else needRender=true},0)});
