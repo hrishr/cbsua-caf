@@ -220,7 +220,7 @@ body.user .adm{display:none!important}
   </div>
   <div class="card"><h3>Batches</h3>
    <p class="sub" style="margin:0 0 12px;font-size:12px">A batch keeps one round of positions, applicants and scores apart from the others. Start a new batch in Setup before uploading new CBE scores, so nothing mixes with the old round.</p>
-   <div class="scroll"><table class="res"><thead><tr><th>Batch</th><th>Positions</th><th>Applicants</th><th>Duplicate item numbers</th><th></th></tr></thead><tbody id="batBody"></tbody></table></div>
+   <div class="scroll"><table class="res"><thead><tr><th>Batch</th><th>Status</th><th>Positions</th><th>Applicants</th><th>Duplicate item numbers</th><th></th></tr></thead><tbody id="batBody"></tbody></table></div>
   </div>
   <div class="eyebrow" style="margin-top:34px">Access</div>
   <h1>Users</h1>
@@ -296,7 +296,7 @@ function calc(p,r){
 function options(){[['#flt','#sel'],['#flt2','#sel2']].forEach(([fi,se])=>{const f=$(fi).value.toLowerCase();
  const ids=Object.keys(S.positions).sort(byItem).filter(id=>batchOf(S.positions[id])===S.batch&&(id===S.current||(S.positions[id].itemNo+' '+S.positions[id].title).toLowerCase().includes(f)));
  $(se).innerHTML=ids.length?ids.map(id=>{const p=S.positions[id];return`<option value="${id}"${id===S.current?' selected':''}>${esc(posLabel(p))}</option>`}).join(''):'<option value="">No positions in this batch</option>'})}
-function fields(){document.querySelectorAll('[data-k]').forEach(e=>e.value=get(P(),e.dataset.k)??'');head()}
+function fields(){document.querySelectorAll('[data-k]').forEach(e=>{e.value=get(P(),e.dataset.k)??'';e.disabled=batchArchived(S.batch)});head()}
 function head(){const p=P();$('#h1').textContent=p.title||'New position';
  const s=['ex','ws','bei','pf'].reduce((a,k)=>a+(num(p.w[k])||0),0);
  $('#wsum').innerHTML=s===100?'<span class="ok">Weights total 100%.</span>':`<span class="warn">Weights total ${s}%, they should add up to 100%.</span>`}
@@ -349,7 +349,8 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
   <datalist id="pr"><option value="No previous employer"><option value="Previous employer did not issue performance evaluation rating"><option value="No comparative performance rating"></datalist>`+NF+sig()}
  return h}
 function sheet(){const T=TABS[tab];$('#sheet').innerHTML=sheetHTML(T,P());upd();
- if(!isAdmin())document.querySelectorAll('#sheet input[data-f=name]').forEach(i=>i.readOnly=true);if(T==='CBE Scores')cbeTable()}
+ if(!isAdmin())document.querySelectorAll('#sheet input[data-f=name]').forEach(i=>i.readOnly=true);
+ if(batchArchived(S.batch)){document.querySelectorAll('#sheet input[data-f]').forEach(i=>i.readOnly=true);if(!$('#msg2').textContent)$('#msg2').textContent='This batch is archived, so it is read only.'}if(T==='CBE Scores')cbeTable()}
 
 function upd(root=$('#sheet'),p=P()){root.querySelectorAll('tr[data-i]').forEach(tr=>{const r=p.rows[+tr.dataset.i],c=calc(p,r);
  tr.querySelectorAll('[data-c]').forEach(td=>{const k=td.dataset.c;td.textContent=k==='bT'?(c.bT??''):fmt(c[k])});
@@ -357,10 +358,10 @@ function upd(root=$('#sheet'),p=P()){root.querySelectorAll('tr[data-i]').forEach
 function all(){chrome();options();fields();tabs();sheet();settingsUI();batchUI()}
 
 document.addEventListener('input',e=>{const t=e.target,k=t.dataset.k;if(t.dataset.q!==undefined){cbeQ=t.value;cbeTable();return}
- if(k){if(!S.positions[S.current])return;set(P(),k,t.type==='number'?(t.value===''?'':+t.value):t.value);head();if(k==='title'||k==='itemNo')options();save();sheet()}
+ if(k){if(!S.positions[S.current]||batchArchived(S.batch))return;set(P(),k,t.type==='number'?(t.value===''?'':+t.value):t.value);head();if(k==='title'||k==='itemNo')options();save();sheet()}
  else if(t.dataset.f){const r=P().rows[t.closest('tr').dataset.i],f=t.dataset.f;
   if(/^b\d$/.test(f))r.b[+f[1]]=t.value;else r[f]=t.value;f==='name'?save():dirtyScore(S.current,r,f);upd()}});
-document.addEventListener('paste',e=>{const t=e.target;if(t.dataset.f!=='name'||!isAdmin())return;
+document.addEventListener('paste',e=>{const t=e.target;if(t.dataset.f!=='name'||!isAdmin()||batchArchived(S.batch))return;
  const lines=(e.clipboardData.getData('text')||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
  if(lines.length<2)return;e.preventDefault();const rows=P().rows;let i=+t.closest('tr').dataset.i;
  lines.forEach(n=>{if(!rows[i])rows.push(blank());rows[i++].name=n});save();sheet()});
@@ -382,6 +383,7 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  if(t.dataset.ud!==undefined||t.dataset.ur!==undefined){const id=t.dataset.ud??t.dataset.ur,u=S.users.find(x=>x.uid===id);if(!u||u.uid===S.me.uid||!isAdmin())return;
   try{await FB.updateDoc(FB.doc(db,'users',id),t.dataset.ud!==undefined?{disabled:!u.disabled}:{role:u.role==='admin'?'user':'admin'})}catch(e){$('#uerr').textContent=mapErr(e)}return}
  if(a&&!isAdmin())return;
+ if(a&&!/^cbe(This|All)$/.test(a)&&lock())return;
  if(a==='cbeUp')return $('#cbeFile').click();
  if(a==='cbeThis'){cbeQ=codeOf(p.itemNo);return sheet()}
  if(a==='cbeAll'){cbeQ='';return sheet()}
@@ -404,9 +406,9 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  save();sheet()});
 $('#flt').oninput=$('#flt2').oninput=options;
 $('#sel').onchange=$('#sel2').onchange=e=>{S.current=e.target.value;try{localStorage.setItem('caf.cur',S.current)}catch(x){}all()};
-$('#new').onclick=()=>{const id=uid(),n=newPos(P());
+$('#new').onclick=()=>{if(lock())return;const id=uid(),n=newPos(P());
  S.positions[id]=n;S.current=id;$('#flt').value='';save();all();const d=document.querySelector('details');d.open=true;document.querySelector('[data-k=itemNo]').focus()};
-$('#del').onclick=()=>{if(!S.positions[S.current]||!confirm('Delete this position and all its scores?'))return;
+$('#del').onclick=()=>{if(lock())return;if(!S.positions[S.current]||!confirm('Delete this position and all its scores?'))return;
  delete S.positions[S.current];const ids=Object.keys(S.positions);
  if(ids.length)S.current=ids[0];else S.current='';save();all()};
 const cl=v=>String(v??'').replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
@@ -444,13 +446,13 @@ $('#dl').onclick=()=>{if(needX())return;const ps=Object.values(S.positions).filt
  XLSX.utils.book_append_sheet(wb,ws,'Positions');XLSX.writeFile(wb,'positions-template.xlsx');
  msg(ps.length?`Downloaded the template with ${ps.length} positions listed. Fill in the columns and upload it.`:'Downloaded the blank template. Fill it in and upload it.')};
 $('#up').onclick=()=>$('#file').click();
-$('#file').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,wb=>{let made=0,upd=0;
+$('#file').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,wb=>{if(lock())return;let made=0,upd=0;
  sj(wb,wb.SheetNames.includes('Positions')?'Positions':wb.SheetNames[0]).forEach(o=>{const it=cl(o['Plantilla Item Number']);if(!it)return;let id=findPos(it),p;
   if(id){p=S.positions[id];upd++}else{id=uid();p=S.positions[id]=newPos(P());made++}
   RCOLS.forEach(([h,k])=>{const v=o[h];if(v===''||v===undefined)return;set(p,k,k==='elig'?String(v).trim():cl(v))});normItem(p)});
  if(!made&&!upd)return msg('Nothing to import. The first sheet needs a "Plantilla Item Number" column with one row per position.');
  save();all();msg(`Uploaded to the batch "${S.batch}": ${made} new and ${upd} updated positions.`)})};
-$('#cbeFile').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,wb=>{
+$('#cbeFile').onchange=e=>{const f=e.target.files[0];e.target.value='';readX(f,wb=>{if(lock())return;
  const A=XLSX.utils.sheet_to_json(wb.Sheets['Final CBE Scores']||wb.Sheets[wb.SheetNames[0]],{header:1,defval:''}),rows=[];
  A.slice(2).forEach(r=>{const last=cl(r[1]),pos=cl(r[3]);if(!last||!pos||last==='LAST NAME')return;const m=pos.match(ITEM);
   rows.push({no:r[0],last,first:cl(r[2]),pos,item:m?m[1]:'',v:r[4],n:r[5],a:r[6],cbt:r[9],off:r[11]})});
@@ -549,7 +551,7 @@ const stab=o=>JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?
 const posLabel=p=>{const t=cl(p.title).replace(/^[A-Za-z]+\s*\(\d+\)\s*/,''),c=cl(p.itemNo);return t&&c?`${t} (${c})`:(c||t||'Untitled position')};
 const byItem=(a,b)=>(S.positions[a].itemNo||'').localeCompare(S.positions[b].itemNo||'');
 const setPill=t=>{const e=$('#pill');if(e)e.textContent=t};
-const detailsDoc=p=>JSON.parse(JSON.stringify({batch:p.batch||undefined,title:p.title,itemNo:p.itemNo,date:p.date,wsDate:p.wsDate,beiDate:p.beiDate,edu:p.edu,exp:p.exp,trg:p.trg,elig:p.elig,w:p.w,max:p.max,sign:p.sign,rows:p.rows.map(r=>({id:r.id,name:r.name}))}));
+const detailsDoc=p=>JSON.parse(JSON.stringify({batch:p.batch||undefined,archived:p.archived||undefined,title:p.title,itemNo:p.itemNo,date:p.date,wsDate:p.wsDate,beiDate:p.beiDate,edu:p.edu,exp:p.exp,trg:p.trg,elig:p.elig,w:p.w,max:p.max,sign:p.sign,rows:p.rows.map(r=>({id:r.id,name:r.name}))}));
 function mapErr(e){const c=(e&&e.code)||'';if(/api-key/.test(c))return 'The Firebase API key in this page is not valid. Check the config.';
  return({'auth/invalid-credential':'Wrong username or password.','auth/wrong-password':'Wrong username or password.','auth/user-not-found':'Wrong username or password.','auth/invalid-login-credentials':'Wrong username or password.',
  'auth/email-already-in-use':'That username is already taken.','auth/weak-password':'The password must be at least 6 characters.','auth/too-many-requests':'Too many attempts. Wait a few minutes and try again.',
@@ -581,14 +583,14 @@ async function saveHeaders(){const H=S.settings.headers;settingsUI();sheet();
  try{const b=FB.writeBatch(db);for(let i=0;i<8;i++){const ref=FB.doc(db,'headers','h'+i);H[i]?b.set(ref,{i,data:H[i]}):b.delete(ref)}await b.commit()}catch(e){fbErr(e)}}
 
 const typing=()=>{const a=document.activeElement;return!!a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!$('#login').contains(a)};
-const ensureCur=()=>{const bs=batches();if(!S.batch||!bs.includes(S.batch))S.batch=bs[0]||DEFBATCH;
+const ensureCur=()=>{const bs=vis();if(!S.batch||!bs.includes(S.batch))S.batch=bs.find(b=>!batchArchived(b))||bs[0]||DEFBATCH;
  const inB=id=>S.positions[id]&&batchOf(S.positions[id])===S.batch;
  if(!inB(S.current))S.current=Object.keys(S.positions).filter(inB).sort(byItem)[0]||''};
 function soft(){const p=P();document.querySelectorAll('#sheet tr[data-i]').forEach(tr=>{const r=p.rows[+tr.dataset.i];if(!r)return;
   tr.querySelectorAll('input[data-f]').forEach(i=>{if(i===document.activeElement)return;const v=getF(r,i.dataset.f)??'';if(String(i.value)!==String(v))i.value=v})});
  upd();if(TABS[tab]==='CAF')sheet()}
 function autoFix(){if(!isAdmin())return;let ch=0;
- for(const pid in S.positions){const p=S.positions[pid],b=p.itemNo,t=p.title;normItem(p);
+ for(const pid in S.positions){const p=S.positions[pid],b=p.itemNo,t=p.title;if(p.archived)continue;normItem(p);
   if(!cl(p.title)&&S.cbe.rows.length&&batchOf(p)===(S.cbe.batch||DEFBATCH)){const r=S.cbe.rows.find(x=>x.item&&x.item.toLowerCase()===codeOf(p.itemNo).toLowerCase());if(r)p.title='One (1) '+r.pos.replace(TAIL,'')}
   if(S.cbe.rows.length&&p.rows.some(r=>r.name.trim())&&p.rows.every(r=>String(r.raw)===''&&String(r.ex)==='')){const k=JSON.stringify(p.rows.map(r=>[r.raw,r.ex,r.exRem]));syncExam(p);if(JSON.stringify(p.rows.map(r=>[r.raw,r.ex,r.exRem]))!==k)ch++}
   if(S.cbe.rows.length&&batchOf(p)===(S.cbe.batch||DEFBATCH)){const it=codeOf(p.itemNo).toLowerCase(),m=new Map();let pf=0;
@@ -627,16 +629,24 @@ async function fbStart(){try{setPill('Connecting…');STAT='Connecting to Fireba
 
 /* ---- batches ---- */
 const remOf=r=>r.exRem||(num(r.ex)!==null&&num(r.ex)>=60?'Passed':''),DEFBATCH='Batch 1',batchOf=p=>cl(p.batch)||DEFBATCH;let DUPS=0;
+const batchArchived=b=>{const ps=Object.values(S.positions).filter(p=>batchOf(p)===b);return ps.length>0&&ps.every(p=>p.archived)};
+const lock=()=>batchArchived(S.batch)?(msg('This batch is archived, so it is read only. Restore it in Settings → Batches to make changes.'),true):false;
+const vis=()=>isAdmin()?batches():batches().filter(b=>!batchArchived(b));
 const batches=()=>[...new Set([...Object.values(S.positions).map(batchOf),S.batch].filter(Boolean))].sort();
 const setBatch=b=>{S.batch=b;try{localStorage.setItem('caf.batch',b)}catch(e){}S.current='';ensureCur();all()};
-function batchUI(){const bs=batches(),opt=bs.map(b=>`<option value="${esc(b)}"${b===S.batch?' selected':''}>${esc(b)}</option>`).join('');
+function batchUI(){const bs=batches(),opt=vis().sort((a,b)=>batchArchived(a)-batchArchived(b)||a.localeCompare(b)).map(b=>`<option value="${esc(b)}"${b===S.batch?' selected':''}>${esc(b)}${batchArchived(b)?' (archived)':''}</option>`).join('');
  $('#bat').innerHTML=opt;$('#bat2').innerHTML=opt;
  $('#batBody').innerHTML=bs.map(b=>{const ps=Object.values(S.positions).filter(p=>batchOf(p)===b),ap=ps.reduce((n,p)=>n+p.rows.filter(r=>r.name.trim()).length,0),dup=ps.length-new Set(ps.map(p=>codeOf(p.itemNo).toLowerCase())).size;
-  return`<tr><td class="l">${esc(b)}${b===S.batch?' (open)':''}</td><td>${ps.length}</td><td>${ap}</td><td>${dup||''}</td><td><button class="btn sm out" data-br="${esc(b)}">Rename</button> <button class="btn sm del" data-bd="${esc(b)}">Delete</button></td></tr>`}).join('')}
+  const ar=batchArchived(b);return`<tr><td class="l">${esc(b)}${b===S.batch?' (open)':''}</td><td>${ar?'Archived':'Active'}</td><td>${ps.length}</td><td>${ap}</td><td>${dup||''}</td><td><button class="btn sm out" data-ba="${esc(b)}">${ar?'Restore':'Archive'}</button> <button class="btn sm out" data-br="${esc(b)}">Rename</button> <button class="btn sm del" data-bd="${esc(b)}">Delete</button></td></tr>`}).join('')}
 $('#bat').onchange=$('#bat2').onchange=e=>setBatch(e.target.value);
 $('#nbat').onclick=()=>{if(!isAdmin())return;const n=cl(prompt('Name of the new batch (for example: October 2026)')||'');if(!n)return;
  if(batches().includes(n))return msg('That batch already exists.');setBatch(n);msg(`Batch "${n}" is ready and empty. Upload the CBE scores or positions now; they go into this batch only.`)};
 document.addEventListener('click',e=>{const t=e.target;if(!isAdmin())return;
+ if(t.dataset.ba!==undefined){const b=t.dataset.ba,ps=Object.values(S.positions).filter(p=>batchOf(p)===b);if(!ps.length)return msg('This batch has no positions to archive.');const on=!batchArchived(b);
+  if(on&&!confirm(`Archive "${b}"? Users will no longer see it, and nobody can change its scores until you restore it.`))return;
+  ps.forEach(p=>{if(on)p.archived=true;else delete p.archived});
+  if(on&&S.batch===b){const o=batches().find(x=>x!==b&&!batchArchived(x));if(o)S.batch=o}
+  S.current='';ensureCur();save();all();msg(on?`Archived "${b}". Users no longer see it.`:`Restored "${b}".`)}
  if(t.dataset.br!==undefined){const o=t.dataset.br,n=cl(prompt(`New name for the batch "${o}"`,o)||'');if(!n||n===o)return;if(batches().includes(n))return msg('That batch name is already used.');
   Object.values(S.positions).forEach(p=>{if(batchOf(p)===o)p.batch=n});if(S.batch===o){S.batch=n;try{localStorage.setItem('caf.batch',n)}catch(x){}}save();all();msg(`Renamed to "${n}".`)}
  if(t.dataset.bd!==undefined){const b=t.dataset.bd,ids=Object.keys(S.positions).filter(id=>batchOf(S.positions[id])===b);
@@ -651,7 +661,7 @@ $('#pshow').onchange=ev=>['#pwc','#pwn','#pwf'].forEach(q=>$(q).type=ev.target.c
 
 /* CAF.setBEI('Juan Dela Cruz',[25,28,27,23,25]) fills raters A–E for that applicant in the selected position and saves it. */
 window.CAF={state:()=>S,
- setBEI(name,ratings){const r=P().rows.find(x=>x.name.trim().toLowerCase()===String(name).trim().toLowerCase());
+ setBEI(name,ratings){if(batchArchived(S.batch))return false;const r=P().rows.find(x=>x.name.trim().toLowerCase()===String(name).trim().toLowerCase());
   if(!r)return false;r.b=[0,1,2,3,4].map(i=>ratings[i]??'');r.b.forEach((_,i)=>(DIRTY[S.current]??=new Set()).add(r.id+'.b'+i));scoresSoon(S.current);sheet();return true}};
 all();fbStart();
 </script>
