@@ -317,7 +317,7 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
  if(T==='CBE Scores'){h=LH('CBE SCORES')+`<div class="c t3">Competency-Based Exam results of all applicants</div>
   <div class="np row" style="margin:14px 0 4px"><button class="btn sm" data-act="cbeUp">Upload CBE scores (.xlsx)</button>
   <label>Filter by name or item number<input data-q value="${esc(cbeQ)}" placeholder="e.g. CSSACB-UEXSP1-18-2026"></label>
-  <button class="btn sm out" data-act="cbeThis">This position only</button><button class="btn sm out" data-act="cbeAll">Show all</button><button class="btn sm out" data-act="fillall">Create / fill all positions from CBE</button></div><div id="cbeT"></div>`}
+  <button class="btn sm out" data-act="cbeThis">This position only</button><button class="btn sm out" data-act="cbeAll">Show all</button><button class="btn sm out" data-act="fillall">Create / fill all positions from CBE</button><button class="btn sm del" data-act="cbeClear">Clear CBE scores</button></div><div id="cbeT"></div>`}
  else if(T==='CAF'){
   const rows=R.map((r,i)=>({r,c:C[i]})).filter(x=>x.r.name.trim()||x.c.any),tt=x=>Math.round(x.c.tot*1e4)/1e4,al=rows.filter(x=>x.c.any).map(tt);
   const rank=x=>{if(!x.c.any)return'';const v=tt(x);return 1+al.filter(a=>a>v).length+(al.filter(a=>a===v).length-1)/2};
@@ -387,6 +387,9 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  if(a==='cbeUp')return $('#cbeFile').click();
  if(a==='cbeThis'){cbeQ=codeOf(p.itemNo);return sheet()}
  if(a==='cbeAll'){cbeQ='';return sheet()}
+ if(a==='cbeClear'){if(!S.cbe.rows.length)return msg('There are no CBE scores to clear.');
+  if(!confirm(`Clear the CBE scores (${S.cbe.rows.length} rows from ${S.cbe.file}, batch "${S.cbe.batch||DEFBATCH}")? Positions keep the exam scores already copied into them.`))return;
+  S.cbe={rows:[],file:'',batch:''};FB.deleteDoc(FB.doc(db,'meta','cbe')).catch(fbErr);sheet();return msg('The CBE scores were cleared.')}
  if(a==='dedupe'){let n=0,pc=0;const sc=r=>FIELDS.filter(f=>String(getF(r,f)??'')!=='').length;
   for(const id in S.positions){const q=S.positions[id];if(batchOf(q)!==S.batch)continue;const seen=new Map(),keep=[];let k0=n;
    q.rows.forEach(r=>{const k=cl(r.name).toLowerCase();if(!k){keep.push(r);return}const j=seen.get(k);if(j===undefined){seen.set(k,keep.length);keep.push(r)}else{n++;if(sc(r)>sc(keep[j]))keep[j]=r}});
@@ -435,8 +438,8 @@ function syncExam(p){if(batchOf(p)!==(S.cbe.batch||DEFBATCH))return 0;const it=c
  const seen=new Set(),out=L.filter(x=>{const k=key(`${x.last}, ${x.first}`);if(seen.has(k))return false;seen.add(k);return true}).map(x=>{const c=cbeCalc(x),nm=`${x.last}, ${x.first}`;let r=old.get(key(nm));if(!r||used.has(r))r=blank();used.add(r);
   return Object.assign(r,{name:nm,raw:c.none?'':c.raw,ex:c.none?'':+c.cum.toFixed(4),exRem:c.rem==='PASS'?'Passed':c.none?'Did Not Take Exam':'Failed'})});
  p.rows=out.concat(p.rows.filter(r=>r.name.trim()&&!used.has(r)));DUPS+=L.length-out.length;return out.length}
-function cbeTable(){const q=cbeQ.toLowerCase(),R=S.cbe.rows,L=R.filter(x=>!q||(x.last+' '+x.first+' '+x.pos).toLowerCase().includes(q)),sh=L.slice(0,300);
- $('#cbeT').innerHTML=`<p class="sub np" style="margin:6px 0">${R.length?`Showing ${sh.length} of ${L.length} matching rows (${R.length} loaded from ${esc(S.cbe.file)} for the batch "${esc(S.cbe.batch||DEFBATCH)}").${!Object.values(S.positions).some(p=>batchOf(p)===S.batch)&&(S.cbe.batch||DEFBATCH)===S.batch?' This batch has no positions yet: click "Create / fill all positions from CBE" to create them from these scores.':''}`:'No CBE scores loaded yet. Upload the Excel file to begin.'}</p>
+function cbeTable(){const q=cbeQ.toLowerCase(),R=(S.cbe.batch||DEFBATCH)===S.batch?S.cbe.rows:[],L=R.filter(x=>!q||(x.last+' '+x.first+' '+x.pos).toLowerCase().includes(q)),sh=L.slice(0,300);
+ $('#cbeT').innerHTML=`<p class="sub np" style="margin:6px 0">${R.length?`Showing ${sh.length} of ${L.length} matching rows (${R.length} loaded from ${esc(S.cbe.file)} for the batch "${esc(S.cbe.batch||DEFBATCH)}").${!Object.values(S.positions).some(p=>batchOf(p)===S.batch)&&(S.cbe.batch||DEFBATCH)===S.batch?' This batch has no positions yet: click "Create / fill all positions from CBE" to create them from these scores.':''}`:(S.cbe.rows.length?`The CBE scores that are loaded belong to the batch "${esc(S.cbe.batch||DEFBATCH)}", not this one. Upload this batch's CBE scores here.`:'No CBE scores loaded yet. Upload the Excel file to begin.')}</p>
  <div class="scroll"><table class="res cbe"><thead><tr><th rowspan="2">NO.</th><th rowspan="2">LAST NAME</th><th rowspan="2">FIRST NAME</th><th rowspan="2">POSITION APPLIED FOR</th><th colspan="5">Aptitude</th><th colspan="2">CBT</th><th colspan="2">Office-Specific</th><th rowspan="2">Aptitude (20%)</th><th rowspan="2">CBT (40%)</th><th rowspan="2">Office Specific (40%)</th><th rowspan="2">Total Raw Points</th><th rowspan="2">Cumulative Weighted Percentage Rating</th><th rowspan="2">Remarks</th></tr>
  <tr><th>verbal</th><th>numerical</th><th>abstract</th><th>score</th><th>%</th><th>score</th><th>%</th><th>score</th><th>%</th></tr></thead><tbody>${sh.map(x=>{const c=cbeCalc(x);
   return`<tr class="${c.rem==='FAIL'?'rf':c.none?'rd':''}"><td>${esc(x.no)}</td><td class="l">${esc(x.last)}</td><td class="l">${esc(x.first)}</td><td class="l">${esc(x.pos)}</td><td>${esc(x.v)}</td><td>${esc(x.n)}</td><td>${esc(x.a)}</td><td>${c.as??''}</td><td>${fmt(c.ap)}</td><td>${esc(x.cbt)}</td><td>${fmt(c.cp)}</td><td>${esc(x.off)}</td><td>${fmt(c.op)}</td><td>${fmt(c.p[0])}</td><td>${fmt(c.p[1])}</td><td>${fmt(c.p[2])}</td><td>${c.raw}</td><td>${fmt(c.cum)}</td><td class="l">${c.rem}</td></tr>`}).join('')}</tbody></table></div>`}
@@ -650,8 +653,8 @@ document.addEventListener('click',e=>{const t=e.target;if(!isAdmin())return;
  if(t.dataset.br!==undefined){const o=t.dataset.br,n=cl(prompt(`New name for the batch "${o}"`,o)||'');if(!n||n===o)return;if(batches().includes(n))return msg('That batch name is already used.');
   Object.values(S.positions).forEach(p=>{if(batchOf(p)===o)p.batch=n});if(S.batch===o){S.batch=n;try{localStorage.setItem('caf.batch',n)}catch(x){}}save();all();msg(`Renamed to "${n}".`)}
  if(t.dataset.bd!==undefined){const b=t.dataset.bd,ids=Object.keys(S.positions).filter(id=>batchOf(S.positions[id])===b);
-  if(prompt(`This deletes the batch "${b}": ${ids.length} positions and all their scores. Type the batch name to confirm.`)!==b)return;
-  ids.forEach(id=>delete S.positions[id]);if(S.batch===b)S.batch='';S.current='';ensureCur();save();all();msg(`Deleted the batch "${b}" (${ids.length} positions).`)}});
+  if(prompt(`This deletes the batch "${b}": ${ids.length} positions and all their scores, plus the CBE scores loaded for it. Type the batch name to confirm.`)!==b)return;
+  ids.forEach(id=>delete S.positions[id]);if((S.cbe.batch||DEFBATCH)===b&&S.cbe.rows.length){S.cbe={rows:[],file:'',batch:''};FB.deleteDoc(FB.doc(db,'meta','cbe')).catch(fbErr)}if(S.batch===b)S.batch='';S.current='';ensureCur();save();all();msg(`Deleted the batch "${b}" (${ids.length} positions).`)}});
 
 $('#pwgo').onclick=async()=>{const e=t=>$('#pwmsg').textContent=t,cur=$('#pwc').value,nw=$('#pwn').value;
  if(!auth||!auth.currentUser)return;if(!cur)return e('Enter your current password.');if(nw.length<6)return e('The new password must be at least 6 characters.');if(nw!==$('#pwf').value)return e('The new passwords do not match.');
