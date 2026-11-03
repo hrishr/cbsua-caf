@@ -329,10 +329,10 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
   <tr><th rowspan="3">NO.</th><th rowspan="3">NAME</th><th colspan="5">COMPETENCY (${cw}%)</th><th rowspan="3">PERFORMANCE (${w('pf')}%)</th><th rowspan="3">TOTAL EARNED POINTS</th><th rowspan="3">RANK</th><th rowspan="3">REMARKS</th></tr>
   <tr><th colspan="2">Competency-Based Written Exam.</th><th>Work Sample Test</th><th>Behavioral Event Interview</th><th>SUB-TOTAL</th></tr>
   <tr class="eq"><td>Equiv. Score</td><td>${q(w('ex'))}</td><td>${q(w('ws'))}</td><td>${q(w('bei'))}</td><td>${q(cw)}</td></tr></thead>
-  <tbody>${rows.map((x,i)=>`<tr><td>${i+1}</td><td class="l">${esc(x.r.name)}</td><td>${esc(x.r.ex)}</td><td>${fmt(x.c.exP)}</td><td>${fmt(x.c.wsP)}</td><td>${fmt(x.c.bP)}</td><td>${x.c.any?fmt(x.c.sub):''}</td><td>${fmt(x.c.pfP)}</td><td>${x.c.any?fmt(x.c.tot):''}</td><td>${rank(x)}</td><td class="l">${esc(x.r.exRem)}</td></tr>`).join('')||'<tr><td colspan="11" class="nf">Add applicants in Exam Results to see the comparison.</td></tr>'}</tbody></table></div>`+NF+sig(1)}
+  <tbody>${rows.map((x,i)=>`<tr><td>${i+1}</td><td class="l">${esc(x.r.name)}</td><td>${esc(x.r.ex)}</td><td>${fmt(x.c.exP)}</td><td>${fmt(x.c.wsP)}</td><td>${fmt(x.c.bP)}</td><td>${x.c.any?fmt(x.c.sub):''}</td><td>${fmt(x.c.pfP)}</td><td>${x.c.any?fmt(x.c.tot):''}</td><td>${rank(x)}</td><td class="l">${esc(remOf(x.r))}</td></tr>`).join('')||'<tr><td colspan="11" class="nf">Add applicants in Exam Results to see the comparison.</td></tr>'}</tbody></table></div>`+NF+sig(1)}
  else if(T==='Exam Results'){
   h=LH('COMPETENCY-BASED WRITTEN EXAM RESULT')+`<div class="c t3">${FOR}</div><div class="scroll"><table class="res" style="margin-top:14px"><thead><tr><th>NO.</th><th>Name</th><th>Raw Score</th><th>Equiv. Score (%)</th><th>Earned Points (${w('ex')}%)</th><th>Remarks</th><th class="np adm"></th></tr></thead>
-  <datalist id="rm"><option value="Failed"><option value="Did Not Take Exam"></datalist>
+  <datalist id="rm"><option value="Passed"><option value="Failed"><option value="Did Not Take Exam"></datalist>
   <tbody>${body(r=>cell(0,'name',r.name,'l')+cell(0,'raw',r.raw)+cell(0,'ex',r.ex)+dc('exP')+`<td><input list="rm" data-f="exRem" value="${esc(r.exRem)}"></td><td class="np adm"><button class="btn sm del" data-act="del">Remove</button></td>`)}</tbody></table></div>
   ${NF}<div class="np row adm" style="margin:8px 0"><button class="btn sm" data-act="add">Add applicant</button><button class="btn sm out" data-act="add5">Add 5 rows</button><button class="btn sm out" data-act="fill">Fill from CBE scores</button><button class="btn sm out" data-act="dedupe">Remove duplicate applicants (whole batch)</button><span class="sub" style="margin:0">Tip: paste a column of names into a Name cell to fill several rows.</span></div>
   <div class="leg"><b>*Note:</b> Raw score was not included in the result submitted by the Competency-Based Exam Committee<br><i style="background:#f00"></i>Failed<br><i style="background:#f90"></i>Did Not Take Exam</div>`+sig()}
@@ -431,7 +431,7 @@ function cbeCalc(x){const v=num(x.v),n=num(x.n),a=num(x.a),cb=num(x.cbt),of=num(
 function syncExam(p){if(batchOf(p)!==(S.cbe.batch||DEFBATCH))return 0;const it=codeOf(p.itemNo).toLowerCase(),L=it?S.cbe.rows.filter(x=>x.item.toLowerCase()===it):[];if(!L.length)return 0;
  const key=n=>cl(n).toLowerCase(),old=new Map(p.rows.map(r=>[key(r.name),r])),used=new Set();
  const seen=new Set(),out=L.filter(x=>{const k=key(`${x.last}, ${x.first}`);if(seen.has(k))return false;seen.add(k);return true}).map(x=>{const c=cbeCalc(x),nm=`${x.last}, ${x.first}`;let r=old.get(key(nm));if(!r||used.has(r))r=blank();used.add(r);
-  return Object.assign(r,{name:nm,raw:c.none?'':c.raw,ex:c.none?'':+c.cum.toFixed(4),exRem:c.rem==='PASS'?'':c.none?'Did Not Take Exam':'Failed'})});
+  return Object.assign(r,{name:nm,raw:c.none?'':c.raw,ex:c.none?'':+c.cum.toFixed(4),exRem:c.rem==='PASS'?'Passed':c.none?'Did Not Take Exam':'Failed'})});
  p.rows=out.concat(p.rows.filter(r=>r.name.trim()&&!used.has(r)));DUPS+=L.length-out.length;return out.length}
 function cbeTable(){const q=cbeQ.toLowerCase(),R=S.cbe.rows,L=R.filter(x=>!q||(x.last+' '+x.first+' '+x.pos).toLowerCase().includes(q)),sh=L.slice(0,300);
  $('#cbeT').innerHTML=`<p class="sub np" style="margin:6px 0">${R.length?`Showing ${sh.length} of ${L.length} matching rows (${R.length} loaded from ${esc(S.cbe.file)} for the batch "${esc(S.cbe.batch||DEFBATCH)}").${!Object.values(S.positions).some(p=>batchOf(p)===S.batch)&&(S.cbe.batch||DEFBATCH)===S.batch?' This batch has no positions yet: click "Create / fill all positions from CBE" to create them from these scores.':''}`:'No CBE scores loaded yet. Upload the Excel file to begin.'}</p>
@@ -517,7 +517,7 @@ const csv=A=>'\ufeff'+A.map(r=>r.map(v=>{v=String(v??'');return /[",\r\n]/.test(
 function ranked(p){const rs=p.rows.map(r=>({r,c:calc(p,r)})).filter(x=>x.r.name.trim()||x.c.any),t=x=>Math.round(x.c.tot*1e4)/1e4,al=rs.filter(x=>x.c.any).map(t);
  rs.forEach(x=>{if(x.c.any){const v=t(x);x.k=1+al.filter(a=>a>v).length+(al.filter(a=>a===v).length-1)/2}else x.k=''});return rs}
 $('#dCaf').onclick=()=>{const A=[['Batch','Plantilla Item Number','Vacant Position','Rank','Name','Exam Equiv. Score','Written Exam Points','Work Sample Points','BEI Points','Sub-total','Performance Points','Total Earned Points','Remarks']];
- Object.values(S.positions).forEach(p=>ranked(p).forEach(x=>A.push([batchOf(p),p.itemNo,p.title,x.k,x.r.name,x.r.ex,fmt(x.c.exP),fmt(x.c.wsP),fmt(x.c.bP),x.c.any?fmt(x.c.sub):'',fmt(x.c.pfP),x.c.any?fmt(x.c.tot):'',x.r.exRem])));
+ Object.values(S.positions).forEach(p=>ranked(p).forEach(x=>A.push([batchOf(p),p.itemNo,p.title,x.k,x.r.name,x.r.ex,fmt(x.c.exP),fmt(x.c.wsP),fmt(x.c.bP),x.c.any?fmt(x.c.sub):'',fmt(x.c.pfP),x.c.any?fmt(x.c.tot):'',remOf(x.r)])));
  saveFile('caf-results.csv','text/csv',csv(A))};
 $('#dSc').onclick=()=>{const A=[['Batch','Plantilla Item Number','Name','Exam Raw Score','Exam Equiv. Score %','Exam Remarks','WS Raw Score','BEI A','BEI B','BEI C','BEI D','BEI E','Performance Rating','Performance Remarks']];
  Object.values(S.positions).forEach(p=>p.rows.filter(r=>r.name.trim()).forEach(r=>A.push([batchOf(p),p.itemNo,r.name,r.raw,r.ex,r.exRem,r.ws,...r.b,r.pf,r.pfRem])));
@@ -591,6 +591,9 @@ function autoFix(){if(!isAdmin())return;let ch=0;
  for(const pid in S.positions){const p=S.positions[pid],b=p.itemNo,t=p.title;normItem(p);
   if(!cl(p.title)&&S.cbe.rows.length&&batchOf(p)===(S.cbe.batch||DEFBATCH)){const r=S.cbe.rows.find(x=>x.item&&x.item.toLowerCase()===codeOf(p.itemNo).toLowerCase());if(r)p.title='One (1) '+r.pos.replace(TAIL,'')}
   if(S.cbe.rows.length&&p.rows.some(r=>r.name.trim())&&p.rows.every(r=>String(r.raw)===''&&String(r.ex)==='')){const k=JSON.stringify(p.rows.map(r=>[r.raw,r.ex,r.exRem]));syncExam(p);if(JSON.stringify(p.rows.map(r=>[r.raw,r.ex,r.exRem]))!==k)ch++}
+  if(S.cbe.rows.length&&batchOf(p)===(S.cbe.batch||DEFBATCH)){const it=codeOf(p.itemNo).toLowerCase(),m=new Map();let pf=0;
+   S.cbe.rows.forEach(x=>{if(x.item&&x.item.toLowerCase()===it)m.set(cl(`${x.last}, ${x.first}`).toLowerCase(),cbeCalc(x))});
+   p.rows.forEach(r=>{if(!String(r.exRem||'').trim()){const c=m.get(cl(r.name).toLowerCase());if(c&&c.rem==='PASS'){r.exRem='Passed';pf=1}}});if(pf)ch++}
   if(p.itemNo!==b||p.title!==t)ch++}
  if(ch){save();setTimeout(()=>msg(`Repaired ${ch} positions (item numbers, titles or exam scores).`),0)}}
 function afterSnap(structural){ensureCur();autoFix();if(typing()){if(structural)needRender=true;else soft();return}all()}
@@ -623,7 +626,7 @@ async function fbStart(){try{setPill('Connecting…');STAT='Connecting to Fireba
  catch(e){STAT='Could not start Firebase: '+mapErr(e);chrome();setPill('Offline')}}
 
 /* ---- batches ---- */
-const DEFBATCH='Batch 1',batchOf=p=>cl(p.batch)||DEFBATCH;let DUPS=0;
+const remOf=r=>r.exRem||(num(r.ex)!==null&&num(r.ex)>=60?'Passed':''),DEFBATCH='Batch 1',batchOf=p=>cl(p.batch)||DEFBATCH;let DUPS=0;
 const batches=()=>[...new Set([...Object.values(S.positions).map(batchOf),S.batch].filter(Boolean))].sort();
 const setBatch=b=>{S.batch=b;try{localStorage.setItem('caf.batch',b)}catch(e){}S.current='';ensureCur();all()};
 function batchUI(){const bs=batches(),opt=bs.map(b=>`<option value="${esc(b)}"${b===S.batch?' selected':''}>${esc(b)}</option>`).join('');
