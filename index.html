@@ -85,6 +85,12 @@ table{border-collapse:collapse;width:100%}
 }
 
 [hidden]{display:none!important}
+.lbl{font-size:12px;font-weight:600;color:var(--mute);margin-bottom:4px}
+.dd{position:relative;max-width:320px}
+.dd summary{list-style:none;border:1px solid #d9d1bb;border-radius:8px;padding:7px 32px 7px 10px;background:#fff;cursor:pointer;position:relative;font-size:14px;font-weight:500;color:#222}
+.dd summary::-webkit-details-marker{display:none}
+.dd summary:after{content:"▾";position:absolute;right:10px;top:7px;color:var(--mute)}
+.dd .pn{position:absolute;left:0;top:100%;margin-top:4px;z-index:6;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 18px rgba(60,50,20,.15);padding:6px 14px 12px;min-width:100%;white-space:nowrap}
 a.btn{text-decoration:none;display:inline-block}
 .chk{display:flex;align-items:center;gap:8px;font-weight:500;font-size:13px;color:var(--mute);margin-top:8px;cursor:pointer}
 .chk input{display:inline-block;width:auto;margin:0}
@@ -208,7 +214,7 @@ body.user .adm{display:none!important}
     <label>Paper size<select id="pSize"><option>A4</option><option>Letter</option><option>Legal</option></select></label>
     <label>Orientation<select id="pOri"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></label>
    </div>
-   <p class="sub" style="margin:12px 0 0;font-size:12px">Lists are ordered Passed, Failed, Did Not Take the Exam. The CAF prints with the Show filter chosen on the CAF tab.</p>
+   <p class="sub" style="margin:12px 0 0;font-size:12px">Lists are ordered Passed, Failed, Did Not Take the Exam. The CAF prints with the Show choices ticked on the CAF tab.</p>
    <p style="margin:14px 0 0"><button class="btn gold" id="pGo">⬇ Download PDF / Print</button></p>
   </div>
   <div class="card"><h3>Header images</h3>
@@ -269,7 +275,7 @@ const blank=()=>({id:rid(),name:'',raw:'',ex:'',exRem:'',ws:'',b:['','','','',''
 const get=(o,k)=>k.split('.').reduce((a,x)=>a?a[x]:undefined,o);
 const set=(o,k,v)=>{const a=k.split('.'),l=a.pop();a.reduce((x,y)=>x[y]??={},o)[l]=v};
 const uid=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
-const TABS=['CBE Scores','CAF','Exam Results','WS Test','BEI','Performance'];let tab=1,cbeQ='',view='caf',cafF='all';
+const TABS=['CBE Scores','CAF','Exam Results','WS Test','BEI','Performance'];let tab=1,cbeQ='',view='caf',cafSet=new Set([0,1,2]),cafOpen=false;
 
 function seedPos(){return{title:'One (1) University Extension Specialist I',itemNo:'CSSACB-UEXSP1-18-2026',date:'',wsDate:'2026-10-05',beiDate:'October 6-8, 2026',
  edu:"Bachelor’s degree relevant to the job",exp:'1 year of relevant experience',trg:'4 hours of relevant training',
@@ -323,9 +329,10 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
  else if(T==='CAF'){
   const rows=R.map((r,i)=>({r,c:C[i]})).filter(x=>x.r.name.trim()||x.c.any),tt=x=>Math.round(x.c.tot*1e4)/1e4,al=rows.filter(x=>x.c.any).map(tt);
   const rank=x=>{if(!x.c.any)return'';const v=tt(x);return 1+al.filter(a=>a>v).length+(al.filter(a=>a===v).length-1)/2};
-  const shown=rows.slice().sort((a,b)=>grp(a.r)-grp(b.r)||b.c.tot-a.c.tot).filter(x=>cafF==='all'||grp(x.r)===({pass:0,fail:1,dnt:2})[cafF]);
+  const shown=rows.slice().sort((a,b)=>grp(a.r)-grp(b.r)||b.c.tot-a.c.tot).filter(x=>grp(x.r)===3?cafSet.size===3:cafSet.has(grp(x.r)));
+  const cfLbl=cafSet.size===3?'All applicants':cafSet.size===0?'Nothing selected':[['Passed',0],['Failed',1],['Did not take the exam',2]].filter(([l,g])=>cafSet.has(g)).map(x=>x[0]).join(', ');
   const cw=w('ex')+w('ws')+w('bei'),q=n=>+(n/100).toFixed(4);
-  h=LH('COMPARATIVE ASSESSMENT FORM')+`<div class="np row" style="margin:14px 0 0"><label style="max-width:260px">Show<select id="cafF">${[['all','All applicants'],['pass','Passed only'],['fail','Failed only'],['dnt','Did not take the exam only']].map(([v,l])=>`<option value="${v}"${cafF===v?' selected':''}>${l}</option>`).join('')}</select></label></div><p style="margin:14px 0 0">Date: ${esc(dfmt(p.date,1))||'_______________'}</p>
+  h=LH('COMPARATIVE ASSESSMENT FORM')+`<div class="np" style="margin:14px 0 0"><div class="lbl">Show</div><details class="dd" id="cafDD"${cafOpen?' open':''}><summary>${cfLbl}</summary><div class="pn">${[['Passed',0],['Failed',1],['Did not take the exam',2]].map(([l,g])=>`<label class="chk"><input type="checkbox" data-cf="${g}"${cafSet.has(g)?' checked':''}> ${l}</label>`).join('')}</div></details></div><p style="margin:14px 0 0">Date: ${esc(dfmt(p.date,1))||'_______________'}</p>
   <div class="req"><dl><dt>Vacant Positions:</dt><dd>${esc(p.title)}</dd><dd>${esc(p.itemNo)}</dd></dl>
   <dl><dt>Minimum Requirements:</dt><dd>Education: ${esc(p.edu)}</dd><dd>Experience: ${esc(p.exp)}</dd><dd>Training: ${esc(p.trg)}</dd><dd>Eligibility: ${esc((p.elig||'').trim())}</dd></dl></div>
   <div class="scroll"><table class="res"><thead>
@@ -493,7 +500,9 @@ function settingsUI(){const H=S.settings.headers;
 const shrink=f=>new Promise(res=>{const im=new Image();im.onload=()=>{const k=Math.min(1,1200/im.width,240/im.height),c=document.createElement('canvas');
  c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));c.getContext('2d').drawImage(im,0,0,c.width,c.height);
  res(c.toDataURL(f.type==='image/png'?'image/png':'image/jpeg',.88))};im.src=URL.createObjectURL(f)});
-document.addEventListener('change',e=>{if(e.target.id==='cafF'){cafF=e.target.value;sheet()}});
+document.addEventListener('change',e=>{const c=e.target.dataset&&e.target.dataset.cf;if(c===undefined)return;const g=+c;e.target.checked?cafSet.add(g):cafSet.delete(g);cafOpen=true;sheet()});
+document.addEventListener('toggle',e=>{if(e.target.id==='cafDD')cafOpen=e.target.open},true);
+document.addEventListener('click',e=>{const d=$('#cafDD');if(d&&d.open&&!d.contains(e.target)){d.open=false;cafOpen=false}});
 document.addEventListener('change',async e=>{if(e.target.id!=='hdrFile')return;const H=S.settings.headers;
  for(const f of [...e.target.files].slice(0,8-H.length)){const d=await shrink(f);if(d.length>900000){msg('That image is too large. Use a smaller image.');continue}H.push(d)}saveHeaders()});
 
