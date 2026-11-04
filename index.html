@@ -311,10 +311,10 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
  const FOR=`FOR ${esc((p.title||'').toUpperCase())}${p.itemNo?' ('+esc(p.itemNo)+')':''}`;
  const sg=(l,n,ps,x)=>`<div>${l}<div class="nm">${esc(n)||'NAME'}</div><div class="ps">${esc(ps)||'Position'}${x?'<br>'+esc(x):''}</div></div>`;
  const sig=a=>`<div class="sig" style="grid-template-columns:repeat(${a?3:2},1fr)">${sg('Prepared by:',s.prep.n,s.prep.p)}${sg('Certified Correct by:',s.cert.n,s.cert.p)}${a?sg('Approved by:',s.appr.n,s.appr.p,s.appr.r):''}</div>`;
- const ord=R.map((r,i)=>i).sort((a,b)=>grp(R[a])-grp(R[b])||(num(R[b].ex)??-1)-(num(R[a].ex)??-1));
+ const PASSONLY=['WS Test','BEI','Performance'].includes(T),ord=R.map((r,i)=>i).sort((a,b)=>grp(R[a])-grp(R[b])||(num(R[b].ex)??-1)-(num(R[a].ex)??-1)).filter(i=>!PASSONLY||grp(R[i])===0);
  const body=f=>ord.map((i,n)=>`<tr data-i="${i}"><td>${n+1}</td>${f(R[i],i)}</tr>`).join('');
  const nm=r=>`<td class="l">${esc(r.name)}</td>`;
- const NF='<div class="nf">nothing follows</div>';
+ const NF=(PASSONLY?`<div class="nf np">${ord.length?'Only applicants who passed the exam are listed.':'No applicants have passed the exam yet.'}</div>`:'')+'<div class="nf">nothing follows</div>';
  const dc=k=>`<td data-c="${k}"></td>`;let h='';
  if(T==='CBE Scores'){h=LH('CBE SCORES')+`<div class="c t3">Competency-Based Exam results of all applicants</div>
   <div class="np row" style="margin:14px 0 4px"><button class="btn sm" data-act="cbeUp">Upload CBE scores (.xlsx)</button>
@@ -539,7 +539,7 @@ $('#bkFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f||!is
   const np={};for(const k in x.positions){const q=Object.assign(newPos(seedPos()),x.positions[k]);q.rows=(q.rows||[]).map(w=>({...blank(),...w,id:w.id||rid()}));np[k]=q}
   S.positions=np;S.current=Object.keys(np).sort(byItem)[0]||'';save();all();msg('Backup restored. Saving to Firebase…')}catch(z){alert('That file is not a backup from this page.')}};r.readAsText(f)};
 
-const stripP=p=>({...p,rows:p.rows.filter(r=>r.name.trim()).map(r=>({...r,raw:'',ex:'',exRem:'',ws:'',b:['','','','',''],pf:'',pfRem:''}))});
+const stripP=p=>({...p,rows:p.rows.filter(r=>r.name.trim()).map(r=>({...r,_g:grp(r),raw:'',ex:'',exRem:'',ws:'',b:['','','','',''],pf:'',pfRem:''}))});
 $('#pGo').onclick=()=>{const bl=$('#pCont').value==='blank',d=$('#pDoc').value,box=$('#printArea'),
  ps=$('#pPos').value==='all'?Object.values(S.positions).filter(p=>batchOf(p)===S.batch):[P()],ts=d==='all'?[1,2,3,4,5]:[+d];box.innerHTML='';
  ps.forEach(p0=>{const named=p0.rows.filter(r=>r.name.trim()),p=bl?stripP(p0):(named.length?{...p0,rows:named}:p0);
@@ -635,7 +635,7 @@ async function fbStart(){try{setPill('Connecting…');STAT='Connecting to Fireba
  catch(e){STAT='Could not start Firebase: '+mapErr(e);chrome();setPill('Offline')}}
 
 /* ---- batches ---- */
-const grp=r=>{const m=remOf(r);return /^pass/i.test(m)?0:/fail/i.test(m)?1:/did not|dnt/i.test(m)?2:3};
+const grp=r=>{if(r._g!==undefined)return r._g;const m=remOf(r);return /^pass/i.test(m)?0:/fail/i.test(m)?1:/did not|dnt/i.test(m)?2:3};
 const remOf=r=>r.exRem||(num(r.ex)!==null&&num(r.ex)>=60?'Passed':''),DEFBATCH='Batch 1',batchOf=p=>cl(p.batch)||DEFBATCH;let DUPS=0;
 const batchArchived=b=>{const ps=Object.values(S.positions).filter(p=>batchOf(p)===b);return ps.length>0&&ps.every(p=>p.archived)};
 const lock=()=>batchArchived(S.batch)?(msg('This batch is archived, so it is read only. Restore it in Settings → Batches to make changes.'),true):false;
