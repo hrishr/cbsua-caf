@@ -191,6 +191,10 @@ body.user .adm{display:none!important}
   </details></div>
 </div>
 
+ <div id="v-cbe" hidden>
+  <div class="np row" style="margin-bottom:10px"><label style="max-width:230px;min-width:150px">Batch<select id="bat3"></select></label></div>
+  <div class="card paper" id="cbeView"></div>
+ </div>
  <div id="v-caf">
   <div class="np row" style="margin-bottom:6px">
    <label style="max-width:230px;min-width:150px">Batch<select id="bat2"></select></label>
@@ -323,9 +327,9 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
  const NF=(PASSONLY?`<div class="nf np">${ord.length?'Only applicants who passed the exam are listed.':'No applicants have passed the exam yet.'}</div>`:'')+'<div class="nf">nothing follows</div>';
  const dc=k=>`<td data-c="${k}"></td>`;let h='';
  if(T==='CBE Scores'){h=LH('CBE SCORES')+`<div class="c t3">Competency-Based Exam results of all applicants</div>
-  <div class="np row" style="margin:14px 0 4px"><button class="btn sm" data-act="cbeUp">Upload CBE scores (.xlsx)</button>
+  <div class="np row" style="margin:14px 0 4px"><button class="btn sm adm" data-act="cbeUp">Upload CBE scores (.xlsx)</button>
   <label>Filter by name or item number<input data-q value="${esc(cbeQ)}" placeholder="e.g. CSSACB-UEXSP1-18-2026"></label>
-  <button class="btn sm out" data-act="cbeThis">This position only</button><button class="btn sm out" data-act="cbeAll">Show all</button><button class="btn sm out" data-act="fillall">Create / fill all positions from CBE</button><button class="btn sm del" data-act="cbeClear">Clear CBE scores</button></div><div id="cbeT"></div>`}
+  <button class="btn sm out" data-act="cbeThis">This position only</button><button class="btn sm out" data-act="cbeAll">Show all</button><button class="btn sm out adm" data-act="fillall">Create / fill all positions from CBE</button><button class="btn sm del adm" data-act="cbeClear">Clear CBE scores</button></div><div id="cbeT"></div>`}
  else if(T==='CAF'){
   const rows=R.map((r,i)=>({r,c:C[i]})).filter(x=>x.r.name.trim()||x.c.any),tt=x=>Math.round(x.c.tot*1e4)/1e4,al=rows.filter(x=>x.c.any).map(tt);
   const rank=x=>{if(!x.c.any)return'';const v=tt(x);return 1+al.filter(a=>a>v).length+(al.filter(a=>a===v).length-1)/2};
@@ -365,7 +369,8 @@ function sheet(){const T=TABS[tab];$('#sheet').innerHTML=sheetHTML(T,P());upd();
 function upd(root=$('#sheet'),p=P()){root.querySelectorAll('tr[data-i]').forEach(tr=>{const r=p.rows[+tr.dataset.i],c=calc(p,r);
  tr.querySelectorAll('[data-c]').forEach(td=>{const k=td.dataset.c;td.textContent=k==='bT'?(c.bT??''):fmt(c[k])});
  tr.classList.toggle('rf',/fail/i.test(r.exRem));tr.classList.toggle('rd',/did not|dnt/i.test(r.exRem))})}
-function all(){chrome();options();fields();tabs();sheet();settingsUI();batchUI()}
+function cbeView(){$('#cbeView').innerHTML=sheetHTML('CBE Scores',P());cbeTable()}
+function all(){chrome();options();fields();tabs();sheet();settingsUI();batchUI();if(view==='cbe')cbeView();else $('#cbeView').innerHTML=''}
 
 document.addEventListener('input',e=>{const t=e.target,k=t.dataset.k;if(t.dataset.q!==undefined){cbeQ=t.value;cbeTable();return}
  if(k){if(!S.positions[S.current]||batchArchived(S.batch))return;set(P(),k,t.type==='number'?(t.value===''?'':+t.value):t.value);head();if(k==='title'||k==='itemNo')options();save();sheet()}
@@ -377,7 +382,7 @@ document.addEventListener('paste',e=>{const t=e.target;if(t.dataset.f!=='name'||
  lines.forEach(n=>{if(!rows[i])rows.push(blank());rows[i++].name=n});save();sheet()});
 document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P();
  if(t.dataset.t){tab=+t.dataset.t;tabs();sheet();return}
- if(t.dataset.v){if(t.dataset.v!=='caf'&&!isAdmin())return;view=t.dataset.v;chrome();return}
+ if(t.dataset.v){if(!['caf','cbe'].includes(t.dataset.v)&&!isAdmin())return;view=t.dataset.v;chrome();if(view==='cbe')cbeView();return}
  if(t.id==='out'){view='caf';if(FB)FB.signOut(auth);return}
  if(t.dataset.hx!==undefined){S.settings.headers.splice(+t.dataset.hx,1);saveHeaders();return}
  if(t.dataset.up!==undefined){const u=S.users.find(x=>x.uid===t.dataset.up);if(!u||u.uid===S.me.uid||!isAdmin())return;
@@ -392,11 +397,11 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
   catch(e){$('#uerr').textContent=mapErr(e)}return}
  if(t.dataset.ud!==undefined||t.dataset.ur!==undefined){const id=t.dataset.ud??t.dataset.ur,u=S.users.find(x=>x.uid===id);if(!u||u.uid===S.me.uid||!isAdmin())return;
   try{await FB.updateDoc(FB.doc(db,'users',id),t.dataset.ud!==undefined?{disabled:!u.disabled}:{role:u.role==='admin'?'user':'admin'})}catch(e){$('#uerr').textContent=mapErr(e)}return}
- if(a&&!isAdmin())return;
+ if(a&&!isAdmin()&&!/^cbe(This|All)$/.test(a))return;
  if(a&&!/^cbe(This|All)$/.test(a)&&lock())return;
  if(a==='cbeUp')return $('#cbeFile').click();
- if(a==='cbeThis'){cbeQ=codeOf(p.itemNo);return sheet()}
- if(a==='cbeAll'){cbeQ='';return sheet()}
+ if(a==='cbeThis'){cbeQ=codeOf(p.itemNo);return view==='cbe'?cbeView():sheet()}
+ if(a==='cbeAll'){cbeQ='';return view==='cbe'?cbeView():sheet()}
  if(a==='cbeClear'){if(!S.cbe.rows.length)return msg('There are no CBE scores to clear.');
   if(!confirm(`Clear the CBE scores (${S.cbe.rows.length} rows from ${S.cbe.file}, batch "${S.cbe.batch||DEFBATCH}")? Positions keep the exam scores already copied into them.`))return;
   S.cbe={rows:[],file:'',batch:''};FB.deleteDoc(FB.doc(db,'meta','cbe')).catch(fbErr);sheet();return msg('The CBE scores were cleared.')}
@@ -449,7 +454,7 @@ function syncExam(p){if(batchOf(p)!==(S.cbe.batch||DEFBATCH))return 0;const it=c
   return Object.assign(r,{name:nm,raw:c.none?'':c.raw,ex:c.none?'':+c.cum.toFixed(4),exRem:c.rem==='PASS'?'Passed':c.none?'Did Not Take Exam':'Failed'})});
  p.rows=out.concat(p.rows.filter(r=>r.name.trim()&&!used.has(r)));DUPS+=L.length-out.length;return out.length}
 function cbeTable(){const q=cbeQ.toLowerCase(),R=(S.cbe.batch||DEFBATCH)===S.batch?S.cbe.rows:[],KM=new Map(R.map(x=>{const c=cbeCalc(x);return[x,[c.rem==='PASS'?0:c.rem==='FAIL'?1:2,c.cum??-1]]})),L=R.filter(x=>!q||(x.last+' '+x.first+' '+x.pos).toLowerCase().includes(q)).sort((a,b)=>KM.get(a)[0]-KM.get(b)[0]||KM.get(b)[1]-KM.get(a)[1]),sh=L.slice(0,300);
- $('#cbeT').innerHTML=`<p class="sub np" style="margin:6px 0">${R.length?`Showing ${sh.length} of ${L.length} matching rows (${R.length} loaded from ${esc(S.cbe.file)} for the batch "${esc(S.cbe.batch||DEFBATCH)}").${!Object.values(S.positions).some(p=>batchOf(p)===S.batch)&&(S.cbe.batch||DEFBATCH)===S.batch?' This batch has no positions yet: click "Create / fill all positions from CBE" to create them from these scores.':''}`:(S.cbe.rows.length?`The CBE scores that are loaded belong to the batch "${esc(S.cbe.batch||DEFBATCH)}", not this one. Upload this batch's CBE scores here.`:'No CBE scores loaded yet. Upload the Excel file to begin.')}</p>
+ $('#cbeT').innerHTML=`<p class="sub np" style="margin:6px 0">${R.length?`Showing ${sh.length} of ${L.length} matching rows (${R.length} loaded from ${esc(S.cbe.file)} for the batch "${esc(S.cbe.batch||DEFBATCH)}").${isAdmin()&&!Object.values(S.positions).some(p=>batchOf(p)===S.batch)&&(S.cbe.batch||DEFBATCH)===S.batch?' This batch has no positions yet: click "Create / fill all positions from CBE" to create them from these scores.':''}`:(!isAdmin()?'No CBE scores are available for this batch yet.':S.cbe.rows.length?`The CBE scores that are loaded belong to the batch "${esc(S.cbe.batch||DEFBATCH)}", not this one. Upload this batch's CBE scores here.`:'No CBE scores loaded yet. Upload the Excel file to begin.')}</p>
  <div class="scroll"><table class="res cbe"><thead><tr><th rowspan="2">NO.</th><th rowspan="2">LAST NAME</th><th rowspan="2">FIRST NAME</th><th rowspan="2">POSITION APPLIED FOR</th><th colspan="5">Aptitude</th><th colspan="2">CBT</th><th colspan="2">Office-Specific</th><th rowspan="2">Aptitude (20%)</th><th rowspan="2">CBT (40%)</th><th rowspan="2">Office Specific (40%)</th><th rowspan="2">Total Raw Points</th><th rowspan="2">Cumulative Weighted Percentage Rating</th><th rowspan="2">Remarks</th></tr>
  <tr><th>verbal</th><th>numerical</th><th>abstract</th><th>score</th><th>%</th><th>score</th><th>%</th><th>score</th><th>%</th></tr></thead><tbody>${sh.map((x,i)=>{const c=cbeCalc(x);
   return`<tr class="${c.rem==='FAIL'?'rf':c.none?'rd':''}"><td>${i+1}</td><td class="l">${esc(x.last)}</td><td class="l">${esc(x.first)}</td><td class="l">${esc(x.pos)}</td><td>${esc(x.v)}</td><td>${esc(x.n)}</td><td>${esc(x.a)}</td><td>${c.as??''}</td><td>${fmt(c.ap)}</td><td>${esc(x.cbt)}</td><td>${fmt(c.cp)}</td><td>${esc(x.off)}</td><td>${fmt(c.op)}</td><td>${fmt(c.p[0])}</td><td>${fmt(c.p[1])}</td><td>${fmt(c.p[2])}</td><td>${c.raw}</td><td>${fmt(c.cum)}</td><td class="l">${c.rem}</td></tr>`}).join('')}</tbody></table></div>`}
@@ -488,9 +493,9 @@ function chrome(){const ad=isAdmin(),m=me();document.body.classList.toggle('user
  const first=INIT===false;$('#login').hidden=!!m;if(m){$('#lshow').checked=false;$('#lp').type='password'}
  $('#lh').textContent=first?'Create admin account':'Sign in';$('#lnW').hidden=!first;$('#lgo').textContent=first?'Create account':'Sign in';
  $('#lnote').textContent=STAT||(first?'No accounts yet. The account you create here will be the administrator.':'Forgot your password? Ask an administrator to reset it.');
- if(!ad){view='caf';if(tab===0)tab=1}
- $('#side').innerHTML=[['caf','CAF'],['setup','SETUP'],['settings','SETTINGS']].filter(x=>ad||x[0]==='caf').map(([k,l])=>`<button class="sb${view===k?' on':''}" data-v="${k}">${l}</button>`).join('');
- ['caf','setup','settings'].forEach(k=>$('#v-'+k).hidden=view!==k);
+ if(!ad){if(!['caf','cbe'].includes(view))view='caf';if(tab===0)tab=1}
+ $('#side').innerHTML=(ad?[['caf','CAF'],['setup','SETUP'],['settings','SETTINGS']]:[['cbe','CBE SCORES'],['caf','CAF']]).map(([k,l])=>`<button class="sb${view===k?' on':''}" data-v="${k}">${l}</button>`).join('');
+ ['cbe','caf','setup','settings'].forEach(k=>$('#v-'+k).hidden=view!==k);
  $('#who').innerHTML=m?`<span>${esc(m.name)} · ${m.role}</span><button class="btn ghost sm" id="out">Log out</button>`:'';}
 function settingsUI(){const H=S.settings.headers;
  $('#hdrBox').innerHTML=H.map((h,i)=>`<div class="thumb"><img src="${h}" alt=""><button data-hx="${i}" aria-label="Remove image">×</button></div>`).join('')+(H.length<8?'<label class="addimg"><span>+</span>Add image<input type="file" id="hdrFile" accept="image/png,image/jpeg" multiple hidden></label>':'');
@@ -626,8 +631,8 @@ function startListen(){stopListen();const ad=isAdmin(),on=(q,f)=>UN.push(FB.onSn
  on(FB.collection(db,'scores'),snap=>{snap.docChanges().forEach(c=>{const id=c.doc.id,keep=diffKeys(id);RAW.scores[id]=c.type==='removed'?{}:c.doc.data();rebuild(id,keep)});afterSnap(0)});
  on(FB.collection(db,'headers'),snap=>{S.settings.headers=snap.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i).map(x=>x.data);afterSnap(1)});
  on(FB.doc(db,'users',S.me.uid),s=>{if(!s.exists()||s.data().disabled)return FB.signOut(auth);if(s.data().role!==S.me.role){S.me={...S.me,...s.data()};startListen();all()}});
- if(ad){on(FB.collection(db,'users'),snap=>{S.users=snap.docs.map(d=>({uid:d.id,...d.data()})).sort((a,b)=>(a.name||'').localeCompare(b.name||''));afterSnap(1)});
-  on(FB.doc(db,'meta','cbe'),s=>{S.cbe=s.exists()?{rows:s.data().rows||[],file:s.data().file||'',batch:s.data().batch||''}:{rows:[],file:'',batch:''};afterSnap(1)})}
+ if(ad){on(FB.collection(db,'users'),snap=>{S.users=snap.docs.map(d=>({uid:d.id,...d.data()})).sort((a,b)=>(a.name||'').localeCompare(b.name||''));afterSnap(1)});}
+ on(FB.doc(db,'meta','cbe'),s=>{S.cbe=s.exists()?{rows:s.data().rows||[],file:s.data().file||'',batch:s.data().batch||''}:{rows:[],file:'',batch:''};afterSnap(1)});
  setPill('Live · Firebase')}
 async function onAuth(u){if(boot)return;
  if(!u){stopListen();S.me=null;view='caf';setPill('Signed out');all();return}
@@ -652,10 +657,10 @@ const vis=()=>isAdmin()?batches():batches().filter(b=>!batchArchived(b));
 const batches=()=>[...new Set([...Object.values(S.positions).map(batchOf),S.batch].filter(Boolean))].sort();
 const setBatch=b=>{S.batch=b;try{localStorage.setItem('caf.batch',b)}catch(e){}S.current='';ensureCur();all()};
 function batchUI(){const bs=batches(),opt=vis().sort((a,b)=>batchArchived(a)-batchArchived(b)||a.localeCompare(b)).map(b=>`<option value="${esc(b)}"${b===S.batch?' selected':''}>${esc(b)}${batchArchived(b)?' (archived)':''}</option>`).join('');
- $('#bat').innerHTML=opt;$('#bat2').innerHTML=opt;
+ $('#bat').innerHTML=opt;$('#bat2').innerHTML=opt;$('#bat3').innerHTML=opt;
  $('#batBody').innerHTML=bs.map(b=>{const ps=Object.values(S.positions).filter(p=>batchOf(p)===b),ap=ps.reduce((n,p)=>n+p.rows.filter(r=>r.name.trim()).length,0),dup=ps.length-new Set(ps.map(p=>codeOf(p.itemNo).toLowerCase())).size;
   const ar=batchArchived(b);return`<tr><td class="l">${esc(b)}${b===S.batch?' (open)':''}</td><td>${ar?'Archived':'Active'}</td><td>${ps.length}</td><td>${ap}</td><td>${dup||''}</td><td><button class="btn sm out" data-ba="${esc(b)}">${ar?'Restore':'Archive'}</button> <button class="btn sm out" data-br="${esc(b)}">Rename</button> <button class="btn sm del" data-bd="${esc(b)}">Delete</button></td></tr>`}).join('')}
-$('#bat').onchange=$('#bat2').onchange=e=>setBatch(e.target.value);
+$('#bat').onchange=$('#bat2').onchange=$('#bat3').onchange=e=>setBatch(e.target.value);
 $('#nbat').onclick=()=>{if(!isAdmin())return;const n=cl(prompt('Name of the new batch (for example: October 2026)')||'');if(!n)return;
  if(batches().includes(n))return msg('That batch already exists.');setBatch(n);msg(`Batch "${n}" is ready and empty. Upload the CBE scores or positions now; they go into this batch only.`)};
 document.addEventListener('click',e=>{const t=e.target;if(!isAdmin())return;
