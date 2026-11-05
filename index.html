@@ -192,7 +192,9 @@ body.user .adm{display:none!important}
 </div>
 
  <div id="v-cbe" hidden>
-  <div class="np row" style="margin-bottom:10px"><label style="max-width:230px;min-width:150px">Batch<select id="bat3"></select></label></div>
+  <div class="np row" style="margin-bottom:10px"><label style="max-width:230px;min-width:150px">Batch<select id="bat3"></select></label>
+   <label>Find a position<input id="flt3" placeholder="Type an item number or title"></label>
+   <label>Position<select id="sel3"></select></label></div>
   <div class="card paper" id="cbeView"></div>
  </div>
  <div id="v-caf">
@@ -306,7 +308,8 @@ function calc(p,r){
 
 function options(){[['#flt','#sel'],['#flt2','#sel2']].forEach(([fi,se])=>{const f=$(fi).value.toLowerCase();
  const ids=Object.keys(S.positions).sort(byItem).filter(id=>batchOf(S.positions[id])===S.batch&&(id===S.current||(S.positions[id].itemNo+' '+S.positions[id].title).toLowerCase().includes(f)));
- $(se).innerHTML=ids.length?ids.map(id=>`<option value="${id}"${id===S.current?' selected':''}>${esc(posLabel(S.positions[id]))}</option>`).join(''):'<option value="">No positions in this batch</option>'})}
+ $(se).innerHTML=ids.length?ids.map(id=>`<option value="${id}"${id===S.current?' selected':''}>${esc(posLabel(S.positions[id]))}</option>`).join(''):'<option value="">No positions in this batch</option>'});
+ $('#sel3').innerHTML=cbePosOptions($('#flt3').value.toLowerCase())}
 function fields(){document.querySelectorAll('[data-k]').forEach(e=>{e.value=get(P(),e.dataset.k)??'';e.disabled=batchArchived(S.batch)});head()}
 function head(){const p=P();$('#h1').textContent=p.title||'New position';
  const s=['ex','ws','bei','pf'].reduce((a,k)=>a+(num(p.w[k])||0),0);
@@ -328,10 +331,10 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
  const dc=k=>`<td data-c="${k}"></td>`;let h='';
  if(T==='CBE Scores'){h=LH('CBE SCORES')+`<div class="c t3">Competency-Based Exam results of all applicants</div>
   <div class="np row" style="margin:14px 0 4px"><button class="btn sm adm" data-act="cbeUp">Upload CBE scores (.xlsx)</button>
-  <label>Filter by name or item number<input data-q value="${esc(cbeQ)}" placeholder="e.g. CSSACB-UEXSP1-18-2026"></label>
+  <label>Search applicant name<input data-q value="${esc(cbeQ)}" placeholder="Type a last or first name"></label>
   <div style="min-width:240px"><div class="lbl">Show</div><details class="dd" id="cbeDD"><summary>${cbeLbl()}</summary><div class="pn">${[['Passed',0],['Failed',1],['Did not take the exam',2]].map(([l,g])=>`<label class="chk"><input type="checkbox" data-cb="${g}"${cbeSet.has(g)?' checked':''}> ${l}</label>`).join('')}</div></details></div>
-  <label style="flex:1;min-width:260px">Position<select id="cbePosSel">${cbePosOptions()}</select></label>
-  <button class="btn sm out" data-act="cbeThis">This position only</button><button class="btn sm out" data-act="cbeAll">Show all</button><button class="btn sm out adm" data-act="fillall">Create / fill all positions from CBE</button><button class="btn sm del adm" data-act="cbeClear">Clear CBE scores</button></div><div id="cbeT"></div>`}
+  <label class="adm" style="flex:1;min-width:260px">Position<select id="cbePosSel">${cbePosOptions()}</select></label>
+  <button class="btn sm out adm" data-act="cbeThis">This position only</button><button class="btn sm out adm" data-act="cbeAll">Show all</button><button class="btn sm out adm" data-act="fillall">Create / fill all positions from CBE</button><button class="btn sm del adm" data-act="cbeClear">Clear CBE scores</button></div><div id="cbeT"></div>`}
  else if(T==='CAF'){
   const rows=R.map((r,i)=>({r,c:C[i]})).filter(x=>x.r.name.trim()||x.c.any),tt=x=>Math.round(x.c.tot*1e4)/1e4,al=rows.filter(x=>x.c.any).map(tt);
   const rank=x=>{if(!x.c.any)return'';const v=tt(x);return 1+al.filter(a=>a>v).length+(al.filter(a=>a===v).length-1)/2};
@@ -374,7 +377,7 @@ function upd(root=$('#sheet'),p=P()){root.querySelectorAll('tr[data-i]').forEach
 function cbeView(){options();$('#cbeView').innerHTML=sheetHTML('CBE Scores',P());cbeTable()}
 function all(){chrome();options();fields();tabs();sheet();settingsUI();batchUI();if(view==='cbe')cbeView();else $('#cbeView').innerHTML=''}
 
-document.addEventListener('input',e=>{const t=e.target,k=t.dataset.k;if(t.dataset.q!==undefined){cbeQ=t.value;cbePos='';const s3=$('#cbePosSel');if(s3)s3.value='';cbeTable();return}
+document.addEventListener('input',e=>{const t=e.target,k=t.dataset.k;if(t.dataset.q!==undefined){cbeQ=t.value;cbeTable();return}
  if(k){if(!S.positions[S.current]||batchArchived(S.batch))return;set(P(),k,t.type==='number'?(t.value===''?'':+t.value):t.value);head();if(k==='title'||k==='itemNo')options();save();sheet()}
  else if(t.dataset.f){const r=P().rows[t.closest('tr').dataset.i],f=t.dataset.f;
   if(/^b\d$/.test(f))r.b[+f[1]]=t.value;else r[f]=t.value;f==='name'?save():dirtyScore(S.current,r,f);upd()}});
@@ -402,7 +405,7 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  if(a&&!isAdmin()&&!/^cbe(This|All)$/.test(a))return;
  if(a&&!/^cbe(This|All)$/.test(a)&&lock())return;
  if(a==='cbeUp')return $('#cbeFile').click();
- if(a==='cbeThis'){cbeQ=codeOf(p.itemNo);cbePos=codeOf(p.itemNo);return view==='cbe'?cbeView():sheet()}
+ if(a==='cbeThis'){cbePos=codeOf(p.itemNo);return view==='cbe'?cbeView():sheet()}
  if(a==='cbeAll'){cbeQ='';cbePos='';return view==='cbe'?cbeView():sheet()}
  if(a==='cbeClear'){if(!S.cbe.rows.length)return msg('There are no CBE scores to clear.');
   if(!confirm(`Clear the CBE scores (${S.cbe.rows.length} rows from ${S.cbe.file}, batch "${S.cbe.batch||DEFBATCH}")? Positions keep the exam scores already copied into them.`))return;
@@ -424,7 +427,7 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  if(a==='add')p.rows.push(blank());else if(a==='add5')for(let i=0;i<5;i++)p.rows.push(blank());
  else if(a==='del'){p.rows.splice(+t.closest('tr').dataset.i,1);if(!p.rows.length)p.rows.push(blank())}else return;
  save();sheet()});
-$('#flt').oninput=$('#flt2').oninput=options;
+$('#flt').oninput=$('#flt2').oninput=$('#flt3').oninput=options;
 $('#sel').onchange=$('#sel2').onchange=e=>{S.current=e.target.value;try{localStorage.setItem('caf.cur',S.current)}catch(x){}all()};
 $('#new').onclick=()=>{if(lock())return;const id=uid(),n=newPos(P());
  S.positions[id]=n;S.current=id;$('#flt').value='';save();all();const d=document.querySelector('details');d.open=true;document.querySelector('[data-k=itemNo]').focus()};
@@ -455,7 +458,7 @@ function syncExam(p){if(batchOf(p)!==(S.cbe.batch||DEFBATCH))return 0;const it=c
  const seen=new Set(),out=L.filter(x=>{const k=key(`${x.last}, ${x.first}`);if(seen.has(k))return false;seen.add(k);return true}).map(x=>{const c=cbeCalc(x),nm=`${x.last}, ${x.first}`;let r=old.get(key(nm));if(!r||used.has(r))r=blank();used.add(r);
   return Object.assign(r,{name:nm,raw:c.none?'':c.raw,ex:c.none?'':+c.cum.toFixed(4),exRem:c.rem==='PASS'?'Passed':c.none?'Did Not Take Exam':'Failed'})});
  p.rows=out.concat(p.rows.filter(r=>r.name.trim()&&!used.has(r)));DUPS+=L.length-out.length;return out.length}
-function cbeTable(){const q=cbeQ.toLowerCase(),R=(S.cbe.batch||DEFBATCH)===S.batch?S.cbe.rows:[],KM=new Map(R.map(x=>{const c=cbeCalc(x);return[x,[c.rem==='PASS'?0:c.rem==='FAIL'?1:2,c.cum??-1]]})),L=R.filter(x=>!q||(x.last+' '+x.first+' '+x.pos).toLowerCase().includes(q)).filter(x=>cbeSet.has(KM.get(x)[0])).sort((a,b)=>KM.get(a)[0]-KM.get(b)[0]||KM.get(b)[1]-KM.get(a)[1]),sh=L.slice(0,300);
+function cbeTable(){const q=cbeQ.toLowerCase(),R=(S.cbe.batch||DEFBATCH)===S.batch?S.cbe.rows:[],KM=new Map(R.map(x=>{const c=cbeCalc(x);return[x,[c.rem==='PASS'?0:c.rem==='FAIL'?1:2,c.cum??-1]]})),L=R.filter(x=>(!cbePos||x.item===cbePos)&&(!q||(x.last+' '+x.first+' '+x.pos).toLowerCase().includes(q))).filter(x=>cbeSet.has(KM.get(x)[0])).sort((a,b)=>KM.get(a)[0]-KM.get(b)[0]||KM.get(b)[1]-KM.get(a)[1]),sh=L.slice(0,300);
  $('#cbeT').innerHTML=`<p class="sub np" style="margin:6px 0">${R.length?`Showing ${sh.length} of ${L.length} matching rows (${R.length} loaded from ${esc(S.cbe.file)} for the batch "${esc(S.cbe.batch||DEFBATCH)}").${isAdmin()&&!Object.values(S.positions).some(p=>batchOf(p)===S.batch)&&(S.cbe.batch||DEFBATCH)===S.batch?' This batch has no positions yet: click "Create / fill all positions from CBE" to create them from these scores.':''}`:(!isAdmin()?'No CBE scores are available for this batch yet.':S.cbe.rows.length?`The CBE scores that are loaded belong to the batch "${esc(S.cbe.batch||DEFBATCH)}", not this one. Upload this batch's CBE scores here.`:'No CBE scores loaded yet. Upload the Excel file to begin.')}</p>
  <div class="scroll"><table class="res cbe"><thead><tr><th rowspan="2">NO.</th><th rowspan="2">LAST NAME</th><th rowspan="2">FIRST NAME</th><th rowspan="2">POSITION APPLIED FOR</th><th colspan="5">Aptitude</th><th colspan="2">CBT</th><th colspan="2">Office-Specific</th><th rowspan="2">Aptitude (20%)</th><th rowspan="2">CBT (40%)</th><th rowspan="2">Office Specific (40%)</th><th rowspan="2">Total Raw Points</th><th rowspan="2">Cumulative Weighted Percentage Rating</th><th rowspan="2">Remarks</th></tr>
  <tr><th>verbal</th><th>numerical</th><th>abstract</th><th>score</th><th>%</th><th>score</th><th>%</th><th>score</th><th>%</th></tr></thead><tbody>${sh.map((x,i)=>{const c=cbeCalc(x);
@@ -678,9 +681,9 @@ document.addEventListener('click',e=>{const t=e.target;if(!isAdmin())return;
   ids.forEach(id=>delete S.positions[id]);if((S.cbe.batch||DEFBATCH)===b&&S.cbe.rows.length){S.cbe={rows:[],file:'',batch:''};FB.deleteDoc(FB.doc(db,'meta','cbe')).catch(fbErr)}if(S.batch===b)S.batch='';S.current='';ensureCur();save();all();msg(`Deleted the batch "${b}" (${ids.length} positions).`)}});
 
 const cbeRows=()=>(S.cbe.batch||DEFBATCH)===S.batch?S.cbe.rows:[];
-const cbePosOptions=()=>{const m=new Map();cbeRows().forEach(r=>{if(r.item&&!m.has(r.item))m.set(r.item,r.pos)});
+const cbePosOptions=(f='')=>{const m=new Map();cbeRows().forEach(r=>{if(r.item&&!m.has(r.item)&&(!f||r.item===cbePos||(r.item+' '+r.pos).toLowerCase().includes(f)))m.set(r.item,r.pos)});
  return'<option value="">All positions ('+m.size+')</option>'+[...m].sort((a,b)=>a[1].localeCompare(b[1])).map(([it,pos])=>`<option value="${esc(it)}"${it===cbePos?' selected':''}>${esc(pos)}</option>`).join('')};
-document.addEventListener('change',e=>{if(e.target.id!=='cbePosSel')return;cbePos=e.target.value;cbeQ=cbePos;const f=document.querySelector('[data-q]');if(f)f.value=cbeQ;cbeTable()});
+document.addEventListener('change',e=>{if(e.target.id!=='cbePosSel'&&e.target.id!=='sel3')return;cbePos=e.target.value;document.querySelectorAll('#cbePosSel,#sel3').forEach(x=>x.value=cbePos);cbeTable()});
 const cbeLbl=()=>cbeSet.size===3?'All applicants':cbeSet.size===0?'Nothing selected':[['Passed',0],['Failed',1],['Did not take the exam',2]].filter(([l,g])=>cbeSet.has(g)).map(x=>x[0]).join(', ');
 document.addEventListener('change',e=>{const c=e.target.dataset&&e.target.dataset.cb;if(c===undefined)return;const g=+c;e.target.checked?cbeSet.add(g):cbeSet.delete(g);const d=$('#cbeDD summary');if(d)d.textContent=cbeLbl();cbeTable()});
 $('#pwgo').onclick=async()=>{const e=t=>$('#pwmsg').textContent=t,cur=$('#pwc').value,nw=$('#pwn').value;
