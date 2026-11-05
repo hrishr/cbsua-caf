@@ -192,9 +192,7 @@ body.user .adm{display:none!important}
 </div>
 
  <div id="v-cbe" hidden>
-  <div class="np row" style="margin-bottom:10px"><label style="max-width:230px;min-width:150px">Batch<select id="bat3"></select></label>
-   <label>Find a position<input id="flt3" placeholder="Type an item number or title"></label>
-   <label>Position<select id="sel3"></select></label></div>
+  <div class="np row" style="margin-bottom:10px"><label style="max-width:230px;min-width:150px">Batch<select id="bat3"></select></label></div>
   <div class="card paper" id="cbeView"></div>
  </div>
  <div id="v-caf">
@@ -306,10 +304,9 @@ function calc(p,r){
  c.any=[c.exP,c.wsP,c.bP,c.pfP].some(x=>x!==null);
  c.sub=(c.exP||0)+(c.wsP||0)+(c.bP||0);c.tot=c.sub+(c.pfP||0);return c}
 
-function options(){[['#flt','#sel'],['#flt2','#sel2'],['#flt3','#sel3']].forEach(([fi,se])=>{const f=$(fi).value.toLowerCase(),c3=se==='#sel3';
- const ids=Object.keys(S.positions).sort(byItem).filter(id=>batchOf(S.positions[id])===S.batch&&((!c3&&id===S.current)||id===cbePos||(S.positions[id].itemNo+' '+S.positions[id].title).toLowerCase().includes(f)));
- const o=id=>`<option value="${id}"${id===(c3?cbePos:S.current)?' selected':''}>${esc(posLabel(S.positions[id]))}</option>`;
- $(se).innerHTML=c3?'<option value="">All positions</option>'+ids.map(o).join(''):ids.length?ids.map(o).join(''):'<option value="">No positions in this batch</option>'})}
+function options(){[['#flt','#sel'],['#flt2','#sel2']].forEach(([fi,se])=>{const f=$(fi).value.toLowerCase();
+ const ids=Object.keys(S.positions).sort(byItem).filter(id=>batchOf(S.positions[id])===S.batch&&(id===S.current||(S.positions[id].itemNo+' '+S.positions[id].title).toLowerCase().includes(f)));
+ $(se).innerHTML=ids.length?ids.map(id=>`<option value="${id}"${id===S.current?' selected':''}>${esc(posLabel(S.positions[id]))}</option>`).join(''):'<option value="">No positions in this batch</option>'})}
 function fields(){document.querySelectorAll('[data-k]').forEach(e=>{e.value=get(P(),e.dataset.k)??'';e.disabled=batchArchived(S.batch)});head()}
 function head(){const p=P();$('#h1').textContent=p.title||'New position';
  const s=['ex','ws','bei','pf'].reduce((a,k)=>a+(num(p.w[k])||0),0);
@@ -333,6 +330,7 @@ function sheetHTML(T,p){const R=p.rows,C=R.map(r=>calc(p,r)),w=k=>+p.w[k]||0,s=p
   <div class="np row" style="margin:14px 0 4px"><button class="btn sm adm" data-act="cbeUp">Upload CBE scores (.xlsx)</button>
   <label>Filter by name or item number<input data-q value="${esc(cbeQ)}" placeholder="e.g. CSSACB-UEXSP1-18-2026"></label>
   <div style="min-width:240px"><div class="lbl">Show</div><details class="dd" id="cbeDD"><summary>${cbeLbl()}</summary><div class="pn">${[['Passed',0],['Failed',1],['Did not take the exam',2]].map(([l,g])=>`<label class="chk"><input type="checkbox" data-cb="${g}"${cbeSet.has(g)?' checked':''}> ${l}</label>`).join('')}</div></details></div>
+  <label style="flex:1;min-width:260px">Position<select id="cbePosSel">${cbePosOptions()}</select></label>
   <button class="btn sm out" data-act="cbeThis">This position only</button><button class="btn sm out" data-act="cbeAll">Show all</button><button class="btn sm out adm" data-act="fillall">Create / fill all positions from CBE</button><button class="btn sm del adm" data-act="cbeClear">Clear CBE scores</button></div><div id="cbeT"></div>`}
  else if(T==='CAF'){
   const rows=R.map((r,i)=>({r,c:C[i]})).filter(x=>x.r.name.trim()||x.c.any),tt=x=>Math.round(x.c.tot*1e4)/1e4,al=rows.filter(x=>x.c.any).map(tt);
@@ -376,7 +374,7 @@ function upd(root=$('#sheet'),p=P()){root.querySelectorAll('tr[data-i]').forEach
 function cbeView(){options();$('#cbeView').innerHTML=sheetHTML('CBE Scores',P());cbeTable()}
 function all(){chrome();options();fields();tabs();sheet();settingsUI();batchUI();if(view==='cbe')cbeView();else $('#cbeView').innerHTML=''}
 
-document.addEventListener('input',e=>{const t=e.target,k=t.dataset.k;if(t.dataset.q!==undefined){cbeQ=t.value;cbePos='';const s3=$('#sel3');if(s3)s3.value='';cbeTable();return}
+document.addEventListener('input',e=>{const t=e.target,k=t.dataset.k;if(t.dataset.q!==undefined){cbeQ=t.value;cbePos='';const s3=$('#cbePosSel');if(s3)s3.value='';cbeTable();return}
  if(k){if(!S.positions[S.current]||batchArchived(S.batch))return;set(P(),k,t.type==='number'?(t.value===''?'':+t.value):t.value);head();if(k==='title'||k==='itemNo')options();save();sheet()}
  else if(t.dataset.f){const r=P().rows[t.closest('tr').dataset.i],f=t.dataset.f;
   if(/^b\d$/.test(f))r.b[+f[1]]=t.value;else r[f]=t.value;f==='name'?save():dirtyScore(S.current,r,f);upd()}});
@@ -404,7 +402,7 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  if(a&&!isAdmin()&&!/^cbe(This|All)$/.test(a))return;
  if(a&&!/^cbe(This|All)$/.test(a)&&lock())return;
  if(a==='cbeUp')return $('#cbeFile').click();
- if(a==='cbeThis'){cbeQ=codeOf(p.itemNo);cbePos=S.positions[S.current]?S.current:'';return view==='cbe'?cbeView():sheet()}
+ if(a==='cbeThis'){cbeQ=codeOf(p.itemNo);cbePos=codeOf(p.itemNo);return view==='cbe'?cbeView():sheet()}
  if(a==='cbeAll'){cbeQ='';cbePos='';return view==='cbe'?cbeView():sheet()}
  if(a==='cbeClear'){if(!S.cbe.rows.length)return msg('There are no CBE scores to clear.');
   if(!confirm(`Clear the CBE scores (${S.cbe.rows.length} rows from ${S.cbe.file}, batch "${S.cbe.batch||DEFBATCH}")? Positions keep the exam scores already copied into them.`))return;
@@ -426,7 +424,7 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
  if(a==='add')p.rows.push(blank());else if(a==='add5')for(let i=0;i<5;i++)p.rows.push(blank());
  else if(a==='del'){p.rows.splice(+t.closest('tr').dataset.i,1);if(!p.rows.length)p.rows.push(blank())}else return;
  save();sheet()});
-$('#flt').oninput=$('#flt2').oninput=$('#flt3').oninput=options;
+$('#flt').oninput=$('#flt2').oninput=options;
 $('#sel').onchange=$('#sel2').onchange=e=>{S.current=e.target.value;try{localStorage.setItem('caf.cur',S.current)}catch(x){}all()};
 $('#new').onclick=()=>{if(lock())return;const id=uid(),n=newPos(P());
  S.positions[id]=n;S.current=id;$('#flt').value='';save();all();const d=document.querySelector('details');d.open=true;document.querySelector('[data-k=itemNo]').focus()};
@@ -679,9 +677,12 @@ document.addEventListener('click',e=>{const t=e.target;if(!isAdmin())return;
   if(prompt(`This deletes the batch "${b}": ${ids.length} positions and all their scores, plus the CBE scores loaded for it. Type the batch name to confirm.`)!==b)return;
   ids.forEach(id=>delete S.positions[id]);if((S.cbe.batch||DEFBATCH)===b&&S.cbe.rows.length){S.cbe={rows:[],file:'',batch:''};FB.deleteDoc(FB.doc(db,'meta','cbe')).catch(fbErr)}if(S.batch===b)S.batch='';S.current='';ensureCur();save();all();msg(`Deleted the batch "${b}" (${ids.length} positions).`)}});
 
+const cbeRows=()=>(S.cbe.batch||DEFBATCH)===S.batch?S.cbe.rows:[];
+const cbePosOptions=()=>{const m=new Map();cbeRows().forEach(r=>{if(r.item&&!m.has(r.item))m.set(r.item,r.pos)});
+ return'<option value="">All positions ('+m.size+')</option>'+[...m].sort((a,b)=>a[1].localeCompare(b[1])).map(([it,pos])=>`<option value="${esc(it)}"${it===cbePos?' selected':''}>${esc(pos)}</option>`).join('')};
+document.addEventListener('change',e=>{if(e.target.id!=='cbePosSel')return;cbePos=e.target.value;cbeQ=cbePos;const f=document.querySelector('[data-q]');if(f)f.value=cbeQ;cbeTable()});
 const cbeLbl=()=>cbeSet.size===3?'All applicants':cbeSet.size===0?'Nothing selected':[['Passed',0],['Failed',1],['Did not take the exam',2]].filter(([l,g])=>cbeSet.has(g)).map(x=>x[0]).join(', ');
 document.addEventListener('change',e=>{const c=e.target.dataset&&e.target.dataset.cb;if(c===undefined)return;const g=+c;e.target.checked?cbeSet.add(g):cbeSet.delete(g);const d=$('#cbeDD summary');if(d)d.textContent=cbeLbl();cbeTable()});
-$('#sel3').onchange=e=>{cbePos=e.target.value;cbeQ=cbePos&&S.positions[cbePos]?codeOf(S.positions[cbePos].itemNo):'';cbeView()};
 $('#pwgo').onclick=async()=>{const e=t=>$('#pwmsg').textContent=t,cur=$('#pwc').value,nw=$('#pwn').value;
  if(!auth||!auth.currentUser)return;if(!cur)return e('Enter your current password.');if(nw.length<6)return e('The new password must be at least 6 characters.');if(nw!==$('#pwf').value)return e('The new passwords do not match.');
  try{const u=auth.currentUser;await FB.reauthenticateWithCredential(u,FB.EmailAuthProvider.credential(u.email,cur));await FB.updatePassword(u,nw);['#pwc','#pwn','#pwf'].forEach(q=>$(q).value='');e('Password changed.')}
