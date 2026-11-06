@@ -245,8 +245,8 @@ body.user .adm{display:none!important}
    <p class="warn" id="uerr" style="margin:10px 0 0"></p><button class="btn sm" id="uadd" style="margin-top:6px">Add user</button>
   </div>
   <div class="card"><h3>Users</h3>
-   <div class="scroll"><table class="res"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th></th></tr></thead><tbody id="usrBody"></tbody></table></div>
-   <p class="sub" style="font-size:12px;margin:10px 0 0">Accounts live in Firebase, so they work on every computer, and the Firestore rules enforce these limits on the server. To give someone a new password, click Reset password next to their name and tell them the new one.</p>
+   <div class="scroll"><table class="res"><thead><tr><th>Name</th><th>Username</th><th>Password</th><th>Role</th><th></th></tr></thead><tbody id="usrBody"></tbody></table></div>
+   <p class="sub" style="font-size:12px;margin:10px 0 0">Accounts live in Firebase, so they work on every computer, and the Firestore rules enforce these limits on the server. To give someone a new password, click Reset password next to their name and tell them the new one. Passwords are never saved, so the Password column can show one only for this visit, right after you add the user or reset it; it disappears when you reload or sign out.</p>
   </div>
   <div class="card"><h3>Change my password</h3>
    <div class="grid"><label>Current password<input id="pwc" type="password" autocomplete="current-password"></label>
@@ -396,7 +396,7 @@ document.addEventListener('click',async e=>{const t=e.target,a=t.dataset.act,p=P
   try{let gen=((await FB.getDoc(FB.doc(db,'usernames',u.user))).data()||{}).gen||0,c=null;
    const a2=FB.getApps().find(x=>x.name==='adder')||FB.initializeApp(CFG,'adder'),au2=FB.getAuth(a2);
    for(let i=0;i<4&&!c;i++){gen++;try{c=await FB.createUserWithEmailAndPassword(au2,emailOf(u.user,gen),pw)}catch(e){if(!e||e.code!=='auth/email-already-in-use'||i===3)throw e}}
-   await FB.signOut(au2);
+   PW[c.user.uid]=pw;await FB.signOut(au2);
    const b=FB.writeBatch(db);b.set(FB.doc(db,'users',c.user.uid),{name:u.name,user:u.user,role:u.role,...(u.disabled?{disabled:true}:{})});b.delete(FB.doc(db,'users',u.uid));b.set(FB.doc(db,'usernames',u.user),{gen});await b.commit();
    $('#uerr').textContent=`Password reset for ${u.name}. They sign in with the same username and the new password.`}
   catch(e){$('#uerr').textContent=mapErr(e)}return}
@@ -505,7 +505,7 @@ function chrome(){const ad=isAdmin(),m=me();document.body.classList.toggle('user
 function settingsUI(){const H=S.settings.headers;
  $('#hdrBox').innerHTML=H.map((h,i)=>`<div class="thumb"><img src="${h}" alt=""><button data-hx="${i}" aria-label="Remove image">×</button></div>`).join('')+(H.length<8?'<label class="addimg"><span>+</span>Add image<input type="file" id="hdrFile" accept="image/png,image/jpeg" multiple hidden></label>':'');
  $('#hdrCount').textContent=`${H.length} of 8 used. You can pick several files at once.`;
- $('#usrBody').innerHTML=S.users.map(u=>{const self=S.me&&u.uid===S.me.uid;return`<tr><td class="l">${esc(u.name)}</td><td class="l">${esc(u.user)}</td><td>${u.role}${u.disabled?' (disabled)':''}</td><td>${self?'You':`<button class="btn sm out" data-up="${u.uid}">Reset password</button> <button class="btn sm out" data-ur="${u.uid}">Make ${u.role==='admin'?'user':'admin'}</button> <button class="btn sm ${u.disabled?'out':'del'}" data-ud="${u.uid}">${u.disabled?'Enable':'Disable'}</button>`}</td></tr>`}).join('')||'<tr><td colspan="4" class="nf">No users yet.</td></tr>';
+ $('#usrBody').innerHTML=S.users.map(u=>{const self=S.me&&u.uid===S.me.uid;return`<tr><td class="l">${esc(u.name)}</td><td class="l">${esc(u.user)}</td><td>${pwCell(u)}</td><td>${u.role}${u.disabled?' (disabled)':''}</td><td>${self?'You':`<button class="btn sm out" data-up="${u.uid}">Reset password</button> <button class="btn sm out" data-ur="${u.uid}">Make ${u.role==='admin'?'user':'admin'}</button> <button class="btn sm ${u.disabled?'out':'del'}" data-ud="${u.uid}">${u.disabled?'Enable':'Disable'}</button>`}</td></tr>`}).join('')||'<tr><td colspan="5" class="nf">No users yet.</td></tr>';
  $('#usrNote').textContent='Accounts are stored in Firebase, so they work on every computer. Users see only the CAF page and can edit scores only; admins see everything.'}
 const shrink=f=>new Promise(res=>{const im=new Image();im.onload=()=>{const k=Math.min(1,1200/im.width,240/im.height),c=document.createElement('canvas');
  c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));c.getContext('2d').drawImage(im,0,0,c.width,c.height);
@@ -536,7 +536,7 @@ $('#uadd').onclick=async()=>{const name=cl($('#un').value),user=norm($('#uu').va
  if(!name||!USERRE.test(user))return err('Enter a name and a username of 3 to 30 letters or numbers (no spaces).');
  if(pw.length<6)return err('The password must be at least 6 characters.');
  try{const a2=FB.getApps().find(x=>x.name==='adder')||FB.initializeApp(CFG,'adder'),au2=FB.getAuth(a2);
-  const c=await FB.createUserWithEmailAndPassword(au2,emailOf(user),pw);await FB.signOut(au2);
+  const c=await FB.createUserWithEmailAndPassword(au2,emailOf(user),pw);PW[c.user.uid]=pw;await FB.signOut(au2);
   await FB.setDoc(FB.doc(db,'users',c.user.uid),{name,user,role:$('#ur').value});
   ['#un','#uu','#upw'].forEach(q=>$(q).value='');err('Added '+name+'.')}catch(e){err(mapErr(e))}};
 
@@ -628,7 +628,7 @@ function afterSnap(structural){ensureCur();autoFix();if(typing()){if(structural)
 document.addEventListener('focusout',e=>{if(!needRender)return;const n=e.relatedTarget;if(n&&/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName))return;
  needRender=false;setTimeout(()=>{if(!typing())all();else needRender=true},0)});
 
-function stopListen(){UN.forEach(f=>{try{f()}catch(e){}});UN=[];RAW.details={};RAW.scores={};S.positions={};S.users=[];S.cbe={rows:[],file:''};S.settings={headers:[]}}
+function stopListen(){UN.forEach(f=>{try{f()}catch(e){}});UN=[];Object.keys(PW).forEach(k=>delete PW[k]);PWSHOW.clear();RAW.details={};RAW.scores={};S.positions={};S.users=[];S.cbe={rows:[],file:''};S.settings={headers:[]}}
 function startListen(){stopListen();const ad=isAdmin(),on=(q,f)=>UN.push(FB.onSnapshot(q,f,e=>fbErr(e,q.path)));
  on(FB.collection(db,'positions'),snap=>{snap.docChanges().forEach(c=>{const id=c.doc.id;
    if(c.type==='removed'){delete RAW.details[id];delete RAW.scores[id];delete S.positions[id];return}
@@ -653,6 +653,10 @@ async function fbStart(){try{setPill('Connecting…');STAT='Connecting to Fireba
   chrome();setPill('Signed out');await FB.setPersistence(auth,FB.browserSessionPersistence);FB.onAuthStateChanged(auth,onAuth)}
  catch(e){STAT='Could not start Firebase: '+mapErr(e);chrome();setPill('Offline')}}
 
+/* ---- passwords shown only for this visit ---- */
+const PW={},PWSHOW=new Set();
+const pwCell=u=>{const w=PW[u.uid];if(!w)return'<span style="color:var(--mute);font-size:12px">Not stored</span>';const on=PWSHOW.has(u.uid);
+ return`<span style="font-family:ui-monospace,Consolas,monospace">${on?esc(w):'••••••••'}</span> <button class="btn sm out" data-pws="${u.uid}">${on?'Hide':'Show'}</button>`};
 /* ---- batches ---- */
 const grp=r=>{if(r._g!==undefined)return r._g;const m=remOf(r);return /^pass/i.test(m)?0:/fail/i.test(m)?1:/did not|dnt/i.test(m)?2:3};
 const remOf=r=>r.exRem||(num(r.ex)!==null&&num(r.ex)>=60?'Passed':''),DEFBATCH='Batch 1',batchOf=p=>cl(p.batch)||DEFBATCH;let DUPS=0;
@@ -669,6 +673,7 @@ $('#bat').onchange=$('#bat2').onchange=$('#bat3').onchange=e=>setBatch(e.target.
 $('#nbat').onclick=()=>{if(!isAdmin())return;const n=cl(prompt('Name of the new batch (for example: October 2026)')||'');if(!n)return;
  if(batches().includes(n))return msg('That batch already exists.');setBatch(n);msg(`Batch "${n}" is ready and empty. Upload the CBE scores or positions now; they go into this batch only.`)};
 document.addEventListener('click',e=>{const t=e.target;if(!isAdmin())return;
+ if(t.dataset.pws!==undefined){const id=t.dataset.pws;PWSHOW.has(id)?PWSHOW.delete(id):PWSHOW.add(id);settingsUI();return}
  if(t.dataset.ba!==undefined){const b=t.dataset.ba,ps=Object.values(S.positions).filter(p=>batchOf(p)===b);if(!ps.length)return msg('This batch has no positions to archive.');const on=!batchArchived(b);
   if(on&&!confirm(`Archive "${b}"? Users will no longer see it, and nobody can change its scores until you restore it.`))return;
   ps.forEach(p=>{if(on)p.archived=true;else delete p.archived});
